@@ -50,7 +50,7 @@
                             <select name="month">
                                 <option value="">All</option>
                                 {% for idx in range(1, 13) %}
-                                <option value="{{ idx }}" {% if month_selection == idx %}selected{% endif %}>{{ calendar.month_name[idx] }}</option>
+                                <option value="{{ idx }}">{{ calendar.month_name[idx] }}</option>
                                 {% endfor %}
                             </select>
                         </label>
@@ -60,7 +60,7 @@
                             <select name="pillar">
                                 <option value="">All</option>
                                 {% for pillar in pillars %}
-                                <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                                <option value="{{ pillar }}">{{ pillar }}</option>
                                 {% endfor %}
                             </select>
                         </label>
@@ -70,7 +70,7 @@
                             <select name="product">
                                 <option value="">All</option>
                                 {% for product in products %}
-                                <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                                <option value="{{ product }}">{{ product }}</option>
                                 {% endfor %}
                             </select>
                         </label>
@@ -88,6 +88,19 @@
                         </button>
                     </div>
                 </form>
+
+                <div class="filter-summary">
+                    {% if active_filters %}
+                        <span class="filter-summary-label">Current filters:</span>
+                        <div class="filter-chip-row">
+                            {% for active_filter in active_filters %}
+                                <span class="filter-chip">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <span class="filter-summary-label">Current filters: All</span>
+                    {% endif %}
+                </div>
 
                 <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
                     {% for month in months %}
