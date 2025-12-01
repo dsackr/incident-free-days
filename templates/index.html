@@ -28,7 +28,67 @@
                 </span>
             </div>
 
-            <div class="months-grid">
+            <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                <div class="control-row">
+                    <label>
+                        Year
+                        <input type="number" name="year" value="{{ year }}" min="1970" />
+                    </label>
+
+                    <label>
+                        View
+                        <select name="view">
+                            <option value="yearly" {% if view_mode == 'yearly' %}selected{% endif %}>Yearly</option>
+                            <option value="monthly" {% if view_mode == 'monthly' %}selected{% endif %}>Monthly</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Month
+                        <select name="month">
+                            <option value="">All</option>
+                            {% for idx in range(1, 13) %}
+                            <option value="{{ idx }}" {% if month_selection == idx %}selected{% endif %}>{{ calendar.month_name[idx] }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        Pillar
+                        <select name="pillar">
+                            <option value="">All</option>
+                            {% for pillar in pillars %}
+                            <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        Product
+                        <select name="product">
+                            <option value="">All</option>
+                            {% for product in products %}
+                            <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <button type="submit">Apply</button>
+                </div>
+            </form>
+
+            <div class="upload-panel">
+                <div>
+                    <h3>Bulk update via CSV</h3>
+                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product.</p>
+                    <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
+                        <input type="file" name="file" accept=".csv" required />
+                        <button type="submit">Upload CSV</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
                 {% for month in months %}
                 <div class="month">
                     <div class="month-name">{{ month.name }}</div>
@@ -101,6 +161,11 @@
                 </div>
 
                 <div class="form-row">
+                    <label for="product">Product</label>
+                    <input type="text" id="product" name="product" placeholder="Product name" />
+                </div>
+
+                <div class="form-row">
                     <button type="submit">Save Incident</button>
                 </div>
             </form>
@@ -114,6 +179,7 @@
                         <th>Date</th>
                         <th>Severity</th>
                         <th>Pillar</th>
+                        <th>Product</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -123,6 +189,7 @@
                         <td>{{ inc.date }}</td>
                         <td>{{ inc.severity }}</td>
                         <td>{{ inc.pillar }}</td>
+                        <td>{{ inc.product }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
