@@ -1,8 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for
 from datetime import date, datetime
+import csv
 import calendar
 import json
 import os
+from io import StringIO
 
 app = Flask(__name__)
 
@@ -23,6 +25,38 @@ def load_incidents():
 def save_incidents(incidents):
     with open(DATA_FILE, "w") as f:
         json.dump(incidents, f, indent=2)
+
+
+def parse_date(raw_value):
+    if not raw_value:
+        return None
+
+    raw_value = raw_value.strip()
+    # Normalize trailing Z to a timezone-aware ISO string
+    candidates = [raw_value]
+    if raw_value.endswith("Z"):
+        candidates.append(raw_value[:-1] + "+00:00")
+
+    for value in candidates:
+        for fmt in (
+            "%Y-%m-%d",
+            "%m/%d/%Y",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%d %H:%M:%S%z",
+        ):
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+
+        try:
+            return datetime.fromisoformat(value).date()
+        except ValueError:
+            continue
+
+    return None
 
 
 def build_calendar(year, incidents):
@@ -85,17 +119,54 @@ def build_calendar(year, incidents):
 @app.route("/", methods=["GET"])
 def index():
     year_str = request.args.get("year")
+    view_mode = request.args.get("view", "yearly")
+    month_str = request.args.get("month")
+    pillar_filter = request.args.get("pillar") or None
+    product_filter = request.args.get("product") or None
+
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
     except ValueError:
         year = DEFAULT_YEAR
 
+    try:
+        month_selection = int(month_str) if month_str else None
+    except ValueError:
+        month_selection = None
+
+    if view_mode not in {"yearly", "monthly"}:
+        view_mode = "yearly"
+
     incidents = load_incidents()
-    months = build_calendar(year, incidents)
+
+    # Build filter choices
+    pillars = sorted({inc.get("pillar") for inc in incidents if inc.get("pillar")})
+    products = sorted({inc.get("product") for inc in incidents if inc.get("product")})
+
+    incidents_filtered = []
+    for inc in incidents:
+        if pillar_filter and inc.get("pillar") != pillar_filter:
+            continue
+        if product_filter and inc.get("product") != product_filter:
+            continue
+        incidents_filtered.append(inc)
+
+    months = build_calendar(year, incidents_filtered)
+
+    if view_mode == "monthly":
+        if month_selection is None:
+            today = date.today()
+            month_selection = today.month if today.year == year else 1
+        if 1 <= month_selection <= 12:
+            months = [months[month_selection - 1]]
+        else:
+            month_selection = None
+    else:
+        month_selection = None
 
     # sort incidents newest-first for display
     incidents_sorted = sorted(
-        incidents, key=lambda x: x.get("date", ""), reverse=True
+        incidents_filtered, key=lambda x: x.get("date", ""), reverse=True
     )
 
     return render_template(
@@ -103,6 +174,13 @@ def index():
         year=year,
         months=months,
         incidents=incidents_sorted,
+        view_mode=view_mode,
+        month_selection=month_selection,
+        pillars=pillars,
+        products=products,
+        pillar_filter=pillar_filter,
+        product_filter=product_filter,
+        calendar=calendar,
     )
 
 
@@ -112,20 +190,14 @@ def add_incident():
     raw_date = request.form.get("date", "").strip()
     severity = request.form.get("severity", "").strip()
     pillar = request.form.get("pillar", "").strip()
+    product = request.form.get("product", "").strip()
 
     # basic validation
     if not inc_number or not raw_date:
         return redirect(url_for("index"))
 
     # accept either HTML date (YYYY-MM-DD) or MM/DD/YYYY
-    parsed_date = None
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
-        try:
-            parsed_date = datetime.strptime(raw_date, fmt).date()
-            break
-        except ValueError:
-            continue
-
+    parsed_date = parse_date(raw_date)
     if parsed_date is None:
         return redirect(url_for("index"))
 
@@ -136,11 +208,57 @@ def add_incident():
             "date": parsed_date.isoformat(),
             "severity": severity,
             "pillar": pillar,
+            "product": product,
         }
     )
     save_incidents(incidents)
 
     return redirect(url_for("index", year=parsed_date.year))
+
+
+@app.route("/upload", methods=["POST"])
+def upload_csv():
+    file = request.files.get("file")
+    if not file:
+        return redirect(url_for("index"))
+
+    try:
+        content = file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return redirect(url_for("index"))
+
+    reader = csv.DictReader(StringIO(content))
+    incidents = load_incidents()
+
+    last_year = None
+    for row in reader:
+        inc_number = (row.get("ID") or "").strip()
+        severity = (row.get("Severity") or "").strip()
+        pillar = (row.get("Solution Pillar") or "").strip()
+        product = (row.get("Product") or "").strip()
+        raw_date = (row.get("Reported at") or "").strip()
+
+        parsed_date = parse_date(raw_date)
+        if not inc_number or parsed_date is None:
+            continue
+
+        last_year = parsed_date.year
+        incidents.append(
+            {
+                "inc_number": inc_number,
+                "date": parsed_date.isoformat(),
+                "severity": severity,
+                "pillar": pillar,
+                "product": product,
+            }
+        )
+
+    save_incidents(incidents)
+
+    redirect_year = last_year if last_year is not None else None
+    if redirect_year:
+        return redirect(url_for("index", year=redirect_year))
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
