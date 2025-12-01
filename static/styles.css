@@ -132,6 +132,16 @@ h1 {
     background: #00487d;
 }
 
+.control-row .secondary-button {
+    background: #ffffff;
+    color: #005fa3;
+    border: 1px solid #005fa3;
+}
+
+.control-row .secondary-button:hover {
+    background: #e6f0f9;
+}
+
 .upload-panel {
     border: 1px dashed #cfd8e3;
     padding: 12px;
