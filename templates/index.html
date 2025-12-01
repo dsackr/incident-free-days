@@ -77,17 +77,6 @@
                 </div>
             </form>
 
-            <div class="upload-panel">
-                <div>
-                    <h3>Bulk update via CSV</h3>
-                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product.</p>
-                    <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
-                        <input type="file" name="file" accept=".csv" required />
-                        <button type="submit">Upload CSV</button>
-                    </form>
-                </div>
-            </div>
-
             <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
                 {% for month in months %}
                 <div class="month">
@@ -109,7 +98,7 @@
                             <tr>
                                 {% for day in week %}
                                 {% if day.day %}
-                                    <td class="{{ day.css_class }}">{{ day.day }}</td>
+                                    <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}">{{ day.day }}</td>
                                 {% else %}
                                     <td class="{{ day.css_class }}"></td>
                                 {% endif %}
@@ -121,10 +110,33 @@
                 </div>
                 {% endfor %}
             </div>
+
+            <div class="modal" id="incident-modal" aria-hidden="true" role="dialog">
+                <div class="modal-backdrop" id="incident-modal-backdrop"></div>
+                <div class="modal-content" role="document">
+                    <div class="modal-header">
+                        <h3 id="incident-modal-date">Incidents</h3>
+                        <button type="button" class="modal-close" id="incident-modal-close" aria-label="Close">×</button>
+                    </div>
+                    <div id="incident-modal-body" class="modal-body"></div>
+                </div>
+            </div>
         </div>
 
         <div id="form-tab" class="tab-content">
             <h2>Report Incident</h2>
+
+            <div class="upload-panel">
+                <div>
+                    <h3>Bulk update via CSV</h3>
+                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product.</p>
+                    <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
+                        <input type="file" name="file" accept=".csv" required />
+                        <button type="submit">Upload CSV</button>
+                    </form>
+                </div>
+            </div>
+
             <form method="POST" action="{{ url_for('add_incident') }}" class="incident-form">
                 <div class="form-row">
                     <label for="inc_number">INC number</label>
@@ -199,5 +211,7 @@
             {% endif %}
         </div>
     </div>
+
+    <script id="incident-data" type="application/json">{{ incidents_by_date|tojson }}</script>
 </body>
 </html>

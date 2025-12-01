@@ -209,6 +209,15 @@ h1 {
     color: #ffffff;
 }
 
+.day-cell {
+    cursor: pointer;
+    transition: transform 0.05s ease;
+}
+
+.day-cell:hover {
+    transform: scale(1.02);
+}
+
 .empty {
     background: #ffffff;
     border: none;
@@ -272,4 +281,79 @@ h1 {
 .incidents-table th {
     background: #fafafa;
     text-align: left;
+}
+
+/* Modal */
+
+.modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.open {
+    display: flex;
+}
+
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.modal-content {
+    position: relative;
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    max-width: 520px;
+    width: 100%;
+    z-index: 1;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.modal-body {
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: 14px;
+    color: #2f3b4c;
+}
+
+.modal-close {
+    border: none;
+    background: transparent;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    color: #516174;
+}
+
+.incident-row {
+    border-bottom: 1px solid #e5ebf1;
+    padding: 8px 0;
+}
+
+.incident-row:last-child {
+    border-bottom: none;
+}
+
+.incident-title {
+    font-weight: 600;
+    margin: 0 0 4px 0;
+}
+
+.incident-meta {
+    margin: 0;
+    color: #516174;
+    font-size: 13px;
 }
