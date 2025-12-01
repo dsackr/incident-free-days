@@ -175,6 +175,16 @@ def index():
     else:
         month_selection = None
 
+    active_filters = []
+    if month_selection:
+        active_filters.append(
+            {"label": "Month", "value": calendar.month_name[month_selection]}
+        )
+    if pillar_filter:
+        active_filters.append({"label": "Pillar", "value": pillar_filter})
+    if product_filter:
+        active_filters.append({"label": "Product", "value": product_filter})
+
     # sort incidents newest-first for display
     incidents_sorted = sorted(
         incidents_filtered, key=lambda x: x.get("date", ""), reverse=True
@@ -193,6 +203,7 @@ def index():
         product_filter=product_filter,
         calendar=calendar,
         incidents_by_date=incidents_by_date,
+        active_filters=active_filters,
     )
 
 
@@ -246,7 +257,7 @@ def upload_csv():
     for row in reader:
         inc_number = (row.get("ID") or "").strip()
         severity = (row.get("Severity") or "").strip()
-        pillar = (row.get("Solution Pillar") or "").strip()
+        pillar_raw = (row.get("Solution Pillar") or "").strip()
         product_raw = (row.get("Product") or "").strip()
         raw_date = (row.get("Reported at") or "").strip()
 
@@ -255,20 +266,25 @@ def upload_csv():
             continue
 
         last_year = parsed_date.year
+        pillars = [p.strip() for p in pillar_raw.split(",") if p.strip()]
         products = [p.strip() for p in product_raw.split(",") if p.strip()]
+
+        if not pillars:
+            pillars = [""]
         if not products:
             products = [""]
 
-        for product in products:
-            incidents.append(
-                {
-                    "inc_number": inc_number,
-                    "date": parsed_date.isoformat(),
-                    "severity": severity,
-                    "pillar": pillar,
-                    "product": product,
-                }
-            )
+        for pillar in pillars:
+            for product in products:
+                incidents.append(
+                    {
+                        "inc_number": inc_number,
+                        "date": parsed_date.isoformat(),
+                        "severity": severity,
+                        "pillar": pillar,
+                        "product": product,
+                    }
+                )
 
     save_incidents(incidents)
 
