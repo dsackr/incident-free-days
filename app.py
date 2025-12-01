@@ -116,6 +116,16 @@ def build_calendar(year, incidents):
     return months
 
 
+def group_incidents_by_date(incidents):
+    grouped = {}
+    for inc in incidents:
+        date_value = inc.get("date")
+        if not date_value:
+            continue
+        grouped.setdefault(date_value, []).append(inc)
+    return grouped
+
+
 @app.route("/", methods=["GET"])
 def index():
     year_str = request.args.get("year")
@@ -152,6 +162,7 @@ def index():
         incidents_filtered.append(inc)
 
     months = build_calendar(year, incidents_filtered)
+    incidents_by_date = group_incidents_by_date(incidents_filtered)
 
     if view_mode == "monthly":
         if month_selection is None:
@@ -181,6 +192,7 @@ def index():
         pillar_filter=pillar_filter,
         product_filter=product_filter,
         calendar=calendar,
+        incidents_by_date=incidents_by_date,
     )
 
 
@@ -235,7 +247,7 @@ def upload_csv():
         inc_number = (row.get("ID") or "").strip()
         severity = (row.get("Severity") or "").strip()
         pillar = (row.get("Solution Pillar") or "").strip()
-        product = (row.get("Product") or "").strip()
+        product_raw = (row.get("Product") or "").strip()
         raw_date = (row.get("Reported at") or "").strip()
 
         parsed_date = parse_date(raw_date)
@@ -243,15 +255,20 @@ def upload_csv():
             continue
 
         last_year = parsed_date.year
-        incidents.append(
-            {
-                "inc_number": inc_number,
-                "date": parsed_date.isoformat(),
-                "severity": severity,
-                "pillar": pillar,
-                "product": product,
-            }
-        )
+        products = [p.strip() for p in product_raw.split(",") if p.strip()]
+        if not products:
+            products = [""]
+
+        for product in products:
+            incidents.append(
+                {
+                    "inc_number": inc_number,
+                    "date": parsed_date.isoformat(),
+                    "severity": severity,
+                    "pillar": pillar,
+                    "product": product,
+                }
+            )
 
     save_incidents(incidents)
 
