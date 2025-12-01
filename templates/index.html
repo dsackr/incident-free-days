@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ year }} Incident Free Days</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <script defer src="{{ url_for('static', filename='tabs.js') }}"></script>
+</head>
+<body>
+    <div class="page">
+        <h1>{{ year }} Incident Free Days</h1>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="calendar-tab">Calendar</button>
+            <button class="tab-button" data-tab="form-tab">Report Incident</button>
+        </div>
+
+        <div id="calendar-tab" class="tab-content active">
+            <div class="legend">
+                <span class="legend-item">
+                    <span class="legend-color legend-grey"></span> No data / future
+                </span>
+                <span class="legend-item">
+                    <span class="legend-color legend-green"></span> No incident
+                </span>
+                <span class="legend-item">
+                    <span class="legend-color legend-red"></span> Incident occurred
+                </span>
+            </div>
+
+            <div class="months-grid">
+                {% for month in months %}
+                <div class="month">
+                    <div class="month-name">{{ month.name }}</div>
+                    <table class="month-table">
+                        <thead>
+                            <tr>
+                                <th>S</th>
+                                <th>M</th>
+                                <th>T</th>
+                                <th>W</th>
+                                <th>T</th>
+                                <th>F</th>
+                                <th>S</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for week in month.weeks %}
+                            <tr>
+                                {% for day in week %}
+                                {% if day.day %}
+                                    <td class="{{ day.css_class }}">{{ day.day }}</td>
+                                {% else %}
+                                    <td class="{{ day.css_class }}"></td>
+                                {% endif %}
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="form-tab" class="tab-content">
+            <h2>Report Incident</h2>
+            <form method="POST" action="{{ url_for('add_incident') }}" class="incident-form">
+                <div class="form-row">
+                    <label for="inc_number">INC number</label>
+                    <input type="text" id="inc_number" name="inc_number"
+                           placeholder="INC-001" required />
+                </div>
+
+                <div class="form-row">
+                    <label for="date">Date</label>
+                    <!-- HTML date input (YYYY-MM-DD); backend also accepts MM/DD/YYYY -->
+                    <input type="date" id="date" name="date" required />
+                </div>
+
+                <div class="form-row">
+                    <label for="severity">Severity</label>
+                    <select id="severity" name="severity" required>
+                        <option value="">Select</option>
+                        <option value="1">1 - Critical</option>
+                        <option value="2">2 - High</option>
+                        <option value="3">3 - Medium</option>
+                        <option value="6">6 - Low</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <label for="pillar">Impacted Pillar</label>
+                    <select id="pillar" name="pillar" required>
+                        <option value="">Select</option>
+                        <option value="HCM">HCM</option>
+                        <option value="SS">SS</option>
+                        <option value="ERP">ERP</option>
+                        <option value="D&A">D&amp;A</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <button type="submit">Save Incident</button>
+                </div>
+            </form>
+
+            {% if incidents %}
+            <h3>Recorded Incidents</h3>
+            <table class="incidents-table">
+                <thead>
+                    <tr>
+                        <th>INC</th>
+                        <th>Date</th>
+                        <th>Severity</th>
+                        <th>Pillar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inc in incidents %}
+                    <tr>
+                        <td>{{ inc.inc_number }}</td>
+                        <td>{{ inc.date }}</td>
+                        <td>{{ inc.severity }}</td>
+                        <td>{{ inc.pillar }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No incidents recorded yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
