@@ -165,6 +165,8 @@ def index():
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
     key_missing = request.args.get("key_missing") == "1"
+    key_uploaded = request.args.get("key_uploaded") == "1"
+    key_error = request.args.get("key_error")
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -277,6 +279,8 @@ def index():
         monthly_view_link=monthly_view_link,
         key_present=key_present,
         key_missing=key_missing,
+        key_uploaded=key_uploaded,
+        key_error=key_error,
     )
 
 
@@ -377,24 +381,28 @@ def upload_csv():
 @app.route("/upload-key", methods=["POST"])
 def upload_key_file():
     file = request.files.get("key_file")
-    if not file:
-        return redirect(url_for("index"))
+    if not file or not file.filename:
+        return redirect(url_for("index", key_error="missing"))
 
     try:
         content = file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return redirect(url_for("index", key_error="decode"))
+
+    try:
         data = json.loads(content)
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return redirect(url_for("index"))
+    except json.JSONDecodeError:
+        return redirect(url_for("index", key_error="invalid"))
 
     if not isinstance(data, dict):
-        return redirect(url_for("index"))
+        return redirect(url_for("index", key_error="format"))
 
     normalized = {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
 
     with open(PRODUCT_KEY_FILE, "w") as f:
         json.dump(normalized, f, indent=2)
 
-    return redirect(url_for("index"))
+    return redirect(url_for("index", key_uploaded=1))
 
 
 if __name__ == "__main__":

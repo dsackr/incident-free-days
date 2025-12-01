@@ -151,6 +151,24 @@
             {% if key_missing %}
             <div class="notice error">Upload the product → pillar key before importing CSV data.</div>
             {% endif %}
+            {% if key_uploaded %}
+            <div class="notice success">Product → pillar key saved successfully.</div>
+            {% endif %}
+            {% if key_error %}
+            <div class="notice error">
+                {% if key_error == 'missing' %}
+                    Please choose a JSON file to upload.
+                {% elif key_error == 'decode' %}
+                    Could not read the file. Ensure it is UTF-8 encoded.
+                {% elif key_error == 'invalid' %}
+                    The uploaded file is not valid JSON.
+                {% elif key_error == 'format' %}
+                    The JSON must be an object mapping product names to pillars.
+                {% else %}
+                    Unable to process the uploaded key file.
+                {% endif %}
+            </div>
+            {% endif %}
             {% if key_present %}
             <div class="notice success">A product → pillar key file is available.</div>
             {% else %}
