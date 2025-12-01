@@ -9,6 +9,7 @@ from io import StringIO
 app = Flask(__name__)
 
 DATA_FILE = "incidents.json"
+PRODUCT_KEY_FILE = "product_pillar_key.json"
 DEFAULT_YEAR = 2025
 
 
@@ -25,6 +26,23 @@ def load_incidents():
 def save_incidents(incidents):
     with open(DATA_FILE, "w") as f:
         json.dump(incidents, f, indent=2)
+
+
+def load_product_key():
+    if not os.path.exists(PRODUCT_KEY_FILE):
+        return {}
+
+    try:
+        with open(PRODUCT_KEY_FILE, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    # Normalize keys to strip whitespace for consistent lookups
+    return {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
 
 
 def parse_date(raw_value):
@@ -126,6 +144,14 @@ def group_incidents_by_date(incidents):
     return grouped
 
 
+def resolve_pillar(product, provided_pillar=""):
+    mapping = load_product_key()
+    product_key = (product or "").strip()
+    if mapping and product_key:
+        return mapping.get(product_key, provided_pillar)
+    return provided_pillar
+
+
 @app.route("/", methods=["GET"])
 def index():
     year_str = request.args.get("year")
@@ -212,7 +238,6 @@ def add_incident():
     inc_number = request.form.get("inc_number", "").strip()
     raw_date = request.form.get("date", "").strip()
     severity = request.form.get("severity", "").strip()
-    pillar = request.form.get("pillar", "").strip()
     product = request.form.get("product", "").strip()
 
     # basic validation
@@ -223,6 +248,8 @@ def add_incident():
     parsed_date = parse_date(raw_date)
     if parsed_date is None:
         return redirect(url_for("index"))
+
+    pillar = resolve_pillar(product)
 
     incidents = load_incidents()
     incidents.append(
@@ -274,8 +301,11 @@ def upload_csv():
         if not products:
             products = [""]
 
-        for pillar in pillars:
-            for product in products:
+        for product in products:
+            mapped_pillar = resolve_pillar(product)
+            pillars_for_product = [mapped_pillar] if mapped_pillar else pillars
+
+            for pillar in pillars_for_product:
                 incidents.append(
                     {
                         "inc_number": inc_number,
@@ -291,6 +321,29 @@ def upload_csv():
     redirect_year = last_year if last_year is not None else None
     if redirect_year:
         return redirect(url_for("index", year=redirect_year))
+    return redirect(url_for("index"))
+
+
+@app.route("/upload-key", methods=["POST"])
+def upload_key_file():
+    file = request.files.get("key_file")
+    if not file:
+        return redirect(url_for("index"))
+
+    try:
+        content = file.read().decode("utf-8-sig")
+        data = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return redirect(url_for("index"))
+
+    if not isinstance(data, dict):
+        return redirect(url_for("index"))
+
+    normalized = {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
+
+    with open(PRODUCT_KEY_FILE, "w") as f:
+        json.dump(normalized, f, indent=2)
+
     return redirect(url_for("index"))
 
 

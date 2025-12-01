@@ -155,10 +155,19 @@
             <div class="upload-panel">
                 <div>
                     <h3>Bulk update via CSV</h3>
-                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product.</p>
+                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product. If a product→pillar key is uploaded, it will override the pillar value.</p>
                     <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
                         <input type="file" name="file" accept=".csv" required />
                         <button type="submit">Upload CSV</button>
+                    </form>
+                </div>
+
+                <div>
+                    <h3>Upload product → pillar key</h3>
+                    <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}.</p>
+                    <form method="POST" action="{{ url_for('upload_key_file') }}" enctype="multipart/form-data">
+                        <input type="file" name="key_file" accept=".json" required />
+                        <button type="submit">Upload Key</button>
                     </form>
                 </div>
             </div>
@@ -184,17 +193,6 @@
                         <option value="2">2 - High</option>
                         <option value="3">3 - Medium</option>
                         <option value="6">6 - Low</option>
-                    </select>
-                </div>
-
-                <div class="form-row">
-                    <label for="pillar">Impacted Pillar</label>
-                    <select id="pillar" name="pillar" required>
-                        <option value="">Select</option>
-                        <option value="HCM">HCM</option>
-                        <option value="SS">SS</option>
-                        <option value="ERP">ERP</option>
-                        <option value="D&A">D&amp;A</option>
                     </select>
                 </div>
 
