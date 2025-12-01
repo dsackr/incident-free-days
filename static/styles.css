@@ -1,0 +1,207 @@
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f3f3f3;
+    margin: 0;
+    padding: 0;
+}
+
+.page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+    background: #ffffff;
+    min-height: 100vh;
+}
+
+h1 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 16px;
+}
+
+.tab-button {
+    border: none;
+    background: #eee;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    border-right: 1px solid #ddd;
+}
+
+.tab-button:last-child {
+    border-right: none;
+}
+
+.tab-button.active {
+    background: #ffffff;
+    border-bottom: 2px solid #0077cc;
+    font-weight: 600;
+}
+
+.tab-content {
+    display: none;
+    padding-top: 12px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.legend {
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid #999;
+}
+
+.legend-grey {
+    background: #d0d0d0;
+}
+
+.legend-green {
+    background: #2e7d32;
+}
+
+.legend-red {
+    background: #c62828;
+}
+
+/* Calendar grid */
+
+.months-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    font-size: 10px;
+}
+
+.month {
+    border: 1px solid #ddd;
+    padding: 4px;
+}
+
+.month-name {
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+
+.month-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.month-table th,
+.month-table td {
+    text-align: center;
+    padding: 2px;
+    border: 1px solid #eee;
+}
+
+.month-table th {
+    background: #fafafa;
+    font-weight: 600;
+}
+
+/* Day colors */
+
+.day-none {
+    background: #d0d0d0; /* grey */
+}
+
+.day-ok {
+    background: #2e7d32; /* green */
+    color: #ffffff;
+}
+
+.day-incident {
+    background: #c62828; /* red */
+    color: #ffffff;
+}
+
+.empty {
+    background: #ffffff;
+    border: none;
+}
+
+/* Incident form */
+
+.incident-form {
+    max-width: 400px;
+    margin-bottom: 20px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}
+
+.form-row label {
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.form-row input,
+.form-row select {
+    padding: 6px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.form-row button {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    background: #0077cc;
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.form-row button:hover {
+    background: #005fa3;
+}
+
+/* Incidents table */
+
+.incidents-table {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 600px;
+    font-size: 13px;
+}
+
+.incidents-table th,
+.incidents-table td {
+    border: 1px solid #ddd;
+    padding: 4px 6px;
+}
+
+.incidents-table th {
+    background: #fafafa;
+    text-align: left;
+}
