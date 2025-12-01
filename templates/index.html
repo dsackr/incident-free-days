@@ -30,52 +30,17 @@
                     </span>
                 </div>
 
-                <form class="control-form" method="GET" action="{{ url_for('index') }}">
-                    <div class="control-row">
-                        <label>
-                            Year
-                            <input type="number" name="year" value="{{ year }}" min="1970" />
-                        </label>
-
-                        <label>
-                            View
-                            <select name="view">
-                                <option value="yearly" {% if view_mode == 'yearly' %}selected{% endif %}>Yearly</option>
-                                <option value="monthly" {% if view_mode == 'monthly' %}selected{% endif %}>Monthly</option>
-                            </select>
-                        </label>
-
-                        <label>
-                            Month
-                            <select name="month">
-                                <option value="">All</option>
-                                {% for idx in range(1, 13) %}
-                                <option value="{{ idx }}">{{ calendar.month_name[idx] }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Pillar
-                            <select name="pillar">
-                                <option value="">All</option>
-                                {% for pillar in pillars %}
-                                <option value="{{ pillar }}">{{ pillar }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Product
-                            <select name="product">
-                                <option value="">All</option>
-                                {% for product in products %}
-                                <option value="{{ product }}">{{ product }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <button type="submit">Apply</button>
+                <div class="calendar-header">
+                    <div class="calendar-nav">
+                        <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
+                        <div class="current-period">{{ current_period_label }}</div>
+                        <a class="icon-button" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
+                    </div>
+                    <div class="calendar-actions">
+                        <div class="view-toggle" role="group" aria-label="Calendar view toggle">
+                            <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                            <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                        </div>
                         <button
                             type="button"
                             id="export-calendar"
@@ -86,6 +51,37 @@
                         >
                             Export as Image
                         </button>
+                    </div>
+                </div>
+
+                <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                    <input type="hidden" name="year" value="{{ year }}" />
+                    <input type="hidden" name="view" value="{{ view_mode }}" />
+                    {% if month_selection %}
+                    <input type="hidden" name="month" value="{{ month_selection }}" />
+                    {% endif %}
+                    <div class="control-row">
+                        <label>
+                            Pillar
+                            <select name="pillar">
+                                <option value="">All</option>
+                                {% for pillar in pillars %}
+                                <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
+                        <label>
+                            Product
+                            <select name="product">
+                                <option value="">All</option>
+                                {% for product in products %}
+                                <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
+                        <button type="submit">Apply</button>
                     </div>
                 </form>
 
@@ -152,13 +148,22 @@
         <div id="form-tab" class="tab-content">
             <h2>Report Incident</h2>
 
+            {% if key_missing %}
+            <div class="notice error">Upload the product → pillar key before importing CSV data.</div>
+            {% endif %}
+            {% if key_present %}
+            <div class="notice success">A product → pillar key file is available.</div>
+            {% else %}
+            <div class="notice warning">Upload a product → pillar key JSON before importing any CSV files.</div>
+            {% endif %}
+
             <div class="upload-panel">
                 <div>
                     <h3>Bulk update via CSV</h3>
-                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Solution Pillar → Pillar, Product → Product. If a product→pillar key is uploaded, it will override the pillar value.</p>
+                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Product → Product. Pillars are always populated using the uploaded product → pillar key.</p>
                     <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
-                        <input type="file" name="file" accept=".csv" required />
-                        <button type="submit">Upload CSV</button>
+                        <input type="file" name="file" accept=".csv" required {% if not key_present %}disabled{% endif %} />
+                        <button type="submit" {% if not key_present %}disabled{% endif %}>Upload CSV</button>
                     </form>
                 </div>
 

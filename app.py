@@ -8,8 +8,9 @@ from io import StringIO
 
 app = Flask(__name__)
 
-DATA_FILE = "incidents.json"
-PRODUCT_KEY_FILE = "product_pillar_key.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "incidents.json")
+PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 DEFAULT_YEAR = 2025
 
 
@@ -144,12 +145,16 @@ def group_incidents_by_date(incidents):
     return grouped
 
 
-def resolve_pillar(product, provided_pillar=""):
-    mapping = load_product_key()
+def resolve_pillar(product, provided_pillar="", mapping=None):
+    mapping = mapping if mapping is not None else load_product_key()
     product_key = (product or "").strip()
     if mapping and product_key:
         return mapping.get(product_key, provided_pillar)
     return provided_pillar
+
+
+def incident_exists(incidents, inc_number):
+    return any(inc.get("inc_number") == inc_number for inc in incidents)
 
 
 @app.route("/", methods=["GET"])
@@ -159,6 +164,7 @@ def index():
     month_str = request.args.get("month")
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
+    key_missing = request.args.get("key_missing") == "1"
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -174,6 +180,9 @@ def index():
         view_mode = "yearly"
 
     incidents = load_incidents()
+
+    key_mapping = load_product_key()
+    key_present = bool(key_mapping)
 
     # Build filter choices
     pillars = sorted({inc.get("pillar") for inc in incidents if inc.get("pillar")})
@@ -202,14 +211,45 @@ def index():
         month_selection = None
 
     active_filters = []
-    if month_selection:
-        active_filters.append(
-            {"label": "Month", "value": calendar.month_name[month_selection]}
-        )
     if pillar_filter:
         active_filters.append({"label": "Pillar", "value": pillar_filter})
     if product_filter:
         active_filters.append({"label": "Product", "value": product_filter})
+
+    def build_link(target_view, target_year, target_month=None):
+        params = {"view": target_view, "year": target_year}
+        if target_month:
+            params["month"] = target_month
+        if pillar_filter:
+            params["pillar"] = pillar_filter
+        if product_filter:
+            params["product"] = product_filter
+        return url_for("index", **params)
+
+    if view_mode == "monthly" and month_selection:
+        current_period_label = f"{calendar.month_name[month_selection]} {year}"
+        prev_year = year
+        prev_month = month_selection - 1
+        if prev_month < 1:
+            prev_month = 12
+            prev_year -= 1
+
+        next_year = year
+        next_month = month_selection + 1
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        prev_link = build_link("monthly", prev_year, prev_month)
+        next_link = build_link("monthly", next_year, next_month)
+    else:
+        current_period_label = str(year)
+        prev_link = build_link("yearly", year - 1)
+        next_link = build_link("yearly", year + 1)
+
+    target_month_for_toggle = month_selection or date.today().month
+    yearly_view_link = build_link("yearly", year)
+    monthly_view_link = build_link("monthly", year, target_month_for_toggle)
 
     # sort incidents newest-first for display
     incidents_sorted = sorted(
@@ -230,6 +270,13 @@ def index():
         calendar=calendar,
         incidents_by_date=incidents_by_date,
         active_filters=active_filters,
+        prev_link=prev_link,
+        next_link=next_link,
+        current_period_label=current_period_label,
+        yearly_view_link=yearly_view_link,
+        monthly_view_link=monthly_view_link,
+        key_present=key_present,
+        key_missing=key_missing,
     )
 
 
@@ -249,9 +296,13 @@ def add_incident():
     if parsed_date is None:
         return redirect(url_for("index"))
 
+    incidents = load_incidents()
+
+    if incident_exists(incidents, inc_number):
+        return redirect(url_for("index", year=parsed_date.year))
+
     pillar = resolve_pillar(product)
 
-    incidents = load_incidents()
     incidents.append(
         {
             "inc_number": inc_number,
@@ -261,6 +312,7 @@ def add_incident():
             "product": product,
         }
     )
+
     save_incidents(incidents)
 
     return redirect(url_for("index", year=parsed_date.year))
@@ -272,6 +324,10 @@ def upload_csv():
     if not file:
         return redirect(url_for("index"))
 
+    mapping = load_product_key()
+    if not mapping:
+        return redirect(url_for("index", key_missing=1))
+
     try:
         content = file.read().decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -279,12 +335,12 @@ def upload_csv():
 
     reader = csv.DictReader(StringIO(content))
     incidents = load_incidents()
+    existing_numbers = {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
 
     last_year = None
     for row in reader:
         inc_number = (row.get("ID") or "").strip()
         severity = (row.get("Severity") or "").strip()
-        pillar_raw = (row.get("Solution Pillar") or "").strip()
         product_raw = (row.get("Product") or "").strip()
         raw_date = (row.get("Reported at") or "").strip()
 
@@ -292,29 +348,23 @@ def upload_csv():
         if not inc_number or parsed_date is None:
             continue
 
+        if inc_number in existing_numbers:
+            continue
+
         last_year = parsed_date.year
-        pillars = [p.strip() for p in pillar_raw.split(",") if p.strip()]
-        products = [p.strip() for p in product_raw.split(",") if p.strip()]
+        product = product_raw.split(",")[0].strip() if product_raw else ""
+        pillar = resolve_pillar(product, mapping=mapping)
 
-        if not pillars:
-            pillars = [""]
-        if not products:
-            products = [""]
-
-        for product in products:
-            mapped_pillar = resolve_pillar(product)
-            pillars_for_product = [mapped_pillar] if mapped_pillar else pillars
-
-            for pillar in pillars_for_product:
-                incidents.append(
-                    {
-                        "inc_number": inc_number,
-                        "date": parsed_date.isoformat(),
-                        "severity": severity,
-                        "pillar": pillar,
-                        "product": product,
-                    }
-                )
+        incidents.append(
+            {
+                "inc_number": inc_number,
+                "date": parsed_date.isoformat(),
+                "severity": severity,
+                "pillar": pillar,
+                "product": product,
+            }
+        )
+        existing_numbers.add(inc_number)
 
     save_incidents(incidents)
 
