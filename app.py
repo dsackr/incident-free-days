@@ -207,12 +207,7 @@ def index():
 
     products_by_pillar = {}
     for product, pillar in product_pillar_map.items():
-        if not pillar:
-            continue
-
-        products = products_by_pillar.setdefault(pillar, [])
-        if product not in products:
-            products.append(product)
+        products_by_pillar.setdefault(pillar, set()).add(product)
 
     products_by_pillar = {
         pillar: sorted(values) for pillar, values in products_by_pillar.items()
