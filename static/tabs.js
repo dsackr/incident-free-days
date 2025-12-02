@@ -321,13 +321,18 @@ document.addEventListener("DOMContentLoaded", function () {
     const renderWithHtml2Canvas = async (exportTarget) => {
         if (typeof html2canvas !== "function" || !exportTarget) return null;
 
-        const snapshot = await html2canvas(exportTarget, {
-            scale: 2,
-            backgroundColor: "#ffffff",
-            useCORS: true,
-        });
+        try {
+            const snapshot = await html2canvas(exportTarget, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+                useCORS: true,
+            });
 
-        return { canvas: snapshot };
+            return { canvas: snapshot };
+        } catch (err) {
+            console.warn("html2canvas capture failed, falling back to inline SVG", err);
+            return null;
+        }
     };
 
     const exportCalendar = async (exportButton) => {
