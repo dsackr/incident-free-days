@@ -538,5 +538,9 @@
     <script id="other-data" type="application/json">{{ other_by_date|tojson }}</script>
     <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
     <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
+
+    <footer class="site-footer" aria-label="Footer">
+        <p class="footer-text">You are viewing this page from IP address: <strong>{{ client_ip }}</strong></p>
+    </footer>
 </body>
 </html>

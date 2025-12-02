@@ -13,6 +13,20 @@ body {
     min-height: 100vh;
 }
 
+.site-footer {
+    margin-top: 24px;
+    padding: 12px 16px;
+    background: #f0f4f8;
+    border-top: 1px solid #d9e5f4;
+    color: #2f3b4c;
+    font-size: 13px;
+    text-align: center;
+}
+
+.site-footer strong {
+    color: #0f3d75;
+}
+
 h1 {
     text-align: center;
     margin-top: 0;
