@@ -164,7 +164,9 @@ def index():
     month_str = request.args.get("month")
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
-    severity_filter = request.args.get("severity") or None
+    severity_filter = [
+        value for value in request.args.getlist("severity") if value
+    ]
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
@@ -208,7 +210,7 @@ def index():
             continue
         if product_filter and inc.get("product") != product_filter:
             continue
-        if severity_filter and inc.get("severity") != severity_filter:
+        if severity_filter and inc.get("severity") not in severity_filter:
             continue
 
         try:
@@ -252,7 +254,8 @@ def index():
     if product_filter:
         active_filters.append({"label": "Product", "value": product_filter})
     if severity_filter:
-        active_filters.append({"label": "Severity", "value": severity_filter})
+        for severity in severity_filter:
+            active_filters.append({"label": "Severity", "value": severity})
 
     def build_link(target_view, target_year, target_month=None):
         params = {"view": target_view, "year": target_year}
