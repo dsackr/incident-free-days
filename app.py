@@ -261,8 +261,15 @@ def index():
     year_str = request.args.get("year")
     view_mode = request.args.get("view", "yearly")
     month_str = request.args.get("month")
-    duration_enabled = request.args.get("duration") == "1"
-    multi_day_only = duration_enabled and request.args.get("multi_day") == "1"
+    incident_duration_enabled = request.args.get("incident_duration") == "1"
+    incident_multi_day_only = incident_duration_enabled and request.args.get(
+        "incident_multi_day"
+    ) == "1"
+
+    other_duration_enabled = request.args.get("other_duration") == "1"
+    other_multi_day_only = other_duration_enabled and request.args.get(
+        "other_multi_day"
+    ) == "1"
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
     severity_params = [value for value in request.args.getlist("severity") if value]
@@ -375,7 +382,14 @@ def index():
     else:
         month_selection = None
 
-    def filter_and_group(events, apply_event_type_filter=False, include_severity_filter=False):
+    def filter_and_group(
+        events,
+        *,
+        duration_enabled,
+        multi_day_only,
+        apply_event_type_filter=False,
+        include_severity_filter=False,
+    ):
         filtered = []
         grouped = {}
         dates_with_non_sev6 = set()
@@ -427,10 +441,18 @@ def index():
         return filtered, grouped, dates_with_non_sev6
 
     incidents_filtered, incidents_by_date, incident_dates = filter_and_group(
-        incidents, apply_event_type_filter=False, include_severity_filter=True
+        incidents,
+        duration_enabled=incident_duration_enabled,
+        multi_day_only=incident_multi_day_only,
+        apply_event_type_filter=False,
+        include_severity_filter=True,
     )
     other_filtered, other_by_date, _ = filter_and_group(
-        other_events, apply_event_type_filter=True, include_severity_filter=False
+        other_events,
+        duration_enabled=other_duration_enabled,
+        multi_day_only=other_multi_day_only,
+        apply_event_type_filter=True,
+        include_severity_filter=False,
     )
 
     unique_incident_count = len(
@@ -480,10 +502,16 @@ def index():
         params = {"view": view_mode, "year": year, "tab": target_tab}
         if month_selection:
             params["month"] = month_selection
-        if duration_enabled:
-            params["duration"] = "1"
-        if multi_day_only:
-            params["multi_day"] = "1"
+        if target_tab == "incidents":
+            if incident_duration_enabled:
+                params["incident_duration"] = "1"
+            if incident_multi_day_only:
+                params["incident_multi_day"] = "1"
+        if target_tab == "others":
+            if other_duration_enabled:
+                params["other_duration"] = "1"
+            if other_multi_day_only:
+                params["other_multi_day"] = "1"
 
         if kind != "pillar" and pillar_filter:
             params["pillar"] = pillar_filter
@@ -567,10 +595,16 @@ def index():
         params = {"view": target_view, "year": target_year, "tab": target_tab}
         if target_month:
             params["month"] = target_month
-        if duration_enabled:
-            params["duration"] = "1"
-        if multi_day_only:
-            params["multi_day"] = "1"
+        if target_tab == "incidents":
+            if incident_duration_enabled:
+                params["incident_duration"] = "1"
+            if incident_multi_day_only:
+                params["incident_multi_day"] = "1"
+        if target_tab == "others":
+            if other_duration_enabled:
+                params["other_duration"] = "1"
+            if other_multi_day_only:
+                params["other_multi_day"] = "1"
         if pillar_filter:
             params["pillar"] = pillar_filter
         if product_filter:
@@ -654,8 +688,10 @@ def index():
         current_period_label=current_period_label,
         yearly_view_link=yearly_view_link,
         monthly_view_link=monthly_view_link,
-        duration_enabled=duration_enabled,
-        multi_day_only=multi_day_only,
+        incident_duration_enabled=incident_duration_enabled,
+        incident_multi_day_only=incident_multi_day_only,
+        other_duration_enabled=other_duration_enabled,
+        other_multi_day_only=other_multi_day_only,
         key_present=key_present,
         key_missing=key_missing,
         key_uploaded=key_uploaded,
