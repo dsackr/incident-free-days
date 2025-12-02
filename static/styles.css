@@ -86,6 +86,10 @@ h1 {
     background: #c62828;
 }
 
+.legend-yellow {
+    background: #f9a825;
+}
+
 .control-form {
     background: #f9fbfd;
     border: 1px solid #d9e5f4;
@@ -437,6 +441,11 @@ h1 {
 .day-incident {
     background: #c62828; /* red */
     color: #ffffff;
+}
+
+.day-sev6 {
+    background: #f9a825; /* yellow for Sev6 */
+    color: #1f2a3b;
 }
 
 .day-cell {

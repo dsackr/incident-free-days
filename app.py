@@ -119,7 +119,13 @@ def build_calendar(year, incidents):
                 iso = d.isoformat()
 
                 if iso in incidents_by_date:
-                    css_class = "day-incident"   # red
+                    incidents_for_day = incidents_by_date[iso]
+                    sev6_only = all(
+                        (inc.get("severity", "").strip().lower() in {"sev6", "6"})
+                        for inc in incidents_for_day
+                    )
+
+                    css_class = "day-sev6" if sev6_only else "day-incident"
                 elif d < today:
                     css_class = "day-ok"         # green
                 else:
