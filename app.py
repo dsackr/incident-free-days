@@ -19,9 +19,18 @@ def load_incidents():
         return []
     with open(DATA_FILE, "r") as f:
         try:
-            return json.load(f)
+            data = json.load(f)
         except json.JSONDecodeError:
             return []
+
+    # Ensure the data is a list of dictionaries before continuing. If the file
+    # was corrupted or manually edited into an unexpected shape, fail closed
+    # so the UI remains usable instead of raising 500 errors when iterating
+    # over the incidents.
+    if not isinstance(data, list):
+        return []
+
+    return [entry for entry in data if isinstance(entry, dict)]
 
 
 def save_incidents(incidents):
