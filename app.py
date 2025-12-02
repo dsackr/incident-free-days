@@ -121,12 +121,14 @@ def parse_datetime(raw_value):
             "%m/%d/%Y %H:%M:%S",
         ):
             try:
-                return datetime.strptime(value, fmt)
+                parsed = datetime.strptime(value, fmt)
+                return parsed.replace(tzinfo=None)
             except ValueError:
                 continue
 
         try:
-            return datetime.fromisoformat(value)
+            parsed = datetime.fromisoformat(value)
+            return parsed.replace(tzinfo=None)
         except ValueError:
             continue
 
