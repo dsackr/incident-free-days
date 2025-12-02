@@ -468,7 +468,22 @@ def index():
     def classify_operational(day, day_events, today):
         if day_events:
             sev6_only = all(is_sev6(evt.get("severity")) for evt in day_events)
-            return "day-sev6" if sev6_only else "day-incident"
+            if sev6_only:
+                return "day-sev6"
+
+            incident_count = len(day_events)
+            if incident_count >= 4:
+                intensity_class = "day-incident-heavy"
+            elif incident_count >= 2:
+                intensity_class = "day-incident-medium"
+            else:
+                intensity_class = "day-incident-light"
+
+            sev1_present = any(str(evt.get("severity")) == "1" for evt in day_events)
+            if sev1_present:
+                return f"{intensity_class} day-sev1-marker"
+            return intensity_class
+
         return "day-ok" if day < today else "day-none"
 
     def classify_other(day, day_events, _today):
