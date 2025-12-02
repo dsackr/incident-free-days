@@ -188,9 +188,39 @@ def index():
     key_mapping = load_product_key()
     key_present = bool(key_mapping)
 
-    # Build filter choices
-    pillars = sorted({inc.get("pillar") for inc in incidents if inc.get("pillar")})
-    products = sorted({inc.get("product") for inc in incidents if inc.get("product")})
+    # Build product ↔ pillar relationships
+    product_pillar_map = {k: v for k, v in key_mapping.items() if k and v}
+    for inc in incidents:
+        product = (inc.get("product") or "").strip()
+        pillar = (inc.get("pillar") or "").strip()
+
+        if not product:
+            continue
+
+        if not pillar:
+            pillar = resolve_pillar(product, mapping=key_mapping)
+
+        if pillar:
+            product_pillar_map.setdefault(product, pillar)
+        elif product not in product_pillar_map:
+            product_pillar_map[product] = None
+
+    products_by_pillar = {}
+    for product, pillar in product_pillar_map.items():
+        if not pillar:
+            continue
+
+        products = products_by_pillar.setdefault(pillar, [])
+        if product not in products:
+            products.append(product)
+
+    products_by_pillar = {
+        pillar: sorted(values) for pillar, values in products_by_pillar.items()
+    }
+    products_by_pillar["__all__"] = sorted(product_pillar_map.keys())
+
+    pillars = sorted({value for value in product_pillar_map.values() if value})
+    products = products_by_pillar["__all__"]
     severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
 
     if severity_params:
@@ -202,6 +232,18 @@ def index():
             severity_filter = [
                 sev for sev in severities if sev and sev.lower() != "sev6"
             ]
+
+    if product_filter:
+        resolved_pillar = product_pillar_map.get(product_filter) or resolve_pillar(
+            product_filter, mapping=key_mapping
+        )
+        if resolved_pillar:
+            pillar_filter = resolved_pillar
+
+    if pillar_filter:
+        products = products_by_pillar.get(pillar_filter, [])
+        if product_filter and product_filter not in products:
+            product_filter = None
 
     if view_mode == "monthly":
         if month_selection is None:
@@ -354,6 +396,8 @@ def index():
         pillars=pillars,
         products=products,
         severities=severities,
+        products_by_pillar=products_by_pillar,
+        product_pillar_map=product_pillar_map,
         pillar_filter=pillar_filter,
         product_filter=product_filter,
         severity_filter=severity_filter,

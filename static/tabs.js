@@ -25,6 +25,23 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    const readJsonFromScript = (elementId) => {
+        const el = document.getElementById(elementId);
+        if (!el) return null;
+
+        try {
+            return JSON.parse(el.textContent || "{}");
+        } catch (err) {
+            return null;
+        }
+    };
+
+    const productPillarMap = readJsonFromScript("product-pillar-map") || {};
+    const productsByPillar = readJsonFromScript("products-by-pillar") || {};
+    const allProducts = productsByPillar.__all__ || [];
+    const pillarSelect = document.querySelector("select[name='pillar']");
+    const productSelect = document.querySelector("select[name='product']");
+
     const modal = document.getElementById("incident-modal");
     const modalDateEl = document.getElementById("incident-modal-date");
     const modalBody = document.getElementById("incident-modal-body");
@@ -127,6 +144,66 @@ document.addEventListener("DOMContentLoaded", function () {
 
         updateSeverityLabel();
     }
+
+    const rebuildProductOptions = (allowedProducts) => {
+        if (!productSelect) return;
+
+        const currentValue = productSelect.value;
+        productSelect.innerHTML = "";
+
+        const allOption = document.createElement("option");
+        allOption.value = "";
+        allOption.textContent = "All";
+        productSelect.appendChild(allOption);
+
+        allowedProducts.forEach((product) => {
+            const option = document.createElement("option");
+            option.value = product;
+            option.textContent = product;
+            productSelect.appendChild(option);
+        });
+
+        if (currentValue && allowedProducts.includes(currentValue)) {
+            productSelect.value = currentValue;
+        } else {
+            productSelect.value = "";
+        }
+    };
+
+    const updateProductsForPillar = () => {
+        if (!productSelect) return;
+
+        const selectedPillar = pillarSelect?.value || "";
+        const allowedProducts =
+            (selectedPillar && productsByPillar[selectedPillar]) || allProducts;
+
+        rebuildProductOptions(allowedProducts);
+
+        if (
+            productSelect.value &&
+            Array.isArray(allowedProducts) &&
+            !allowedProducts.includes(productSelect.value)
+        ) {
+            productSelect.value = "";
+        }
+    };
+
+    const syncPillarToProduct = () => {
+        if (!productSelect || !pillarSelect) return;
+
+        const selectedProduct = productSelect.value;
+        const mappedPillar = productPillarMap[selectedProduct];
+        if (mappedPillar && pillarSelect.value !== mappedPillar) {
+            pillarSelect.value = mappedPillar;
+            updateProductsForPillar();
+        }
+    };
+
+    pillarSelect?.addEventListener("change", updateProductsForPillar);
+    productSelect?.addEventListener("change", syncPillarToProduct);
+
+    updateProductsForPillar();
+    syncPillarToProduct();
 
     const buildStyleString = (computed) =>
         Array.from(computed)
