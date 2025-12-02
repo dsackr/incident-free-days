@@ -377,14 +377,19 @@ def upload_csv():
     if not mapping:
         return redirect(url_for("index", key_missing=1))
 
+    import_mode = request.form.get("mode", "update")
+
     try:
         content = file.read().decode("utf-8-sig")
     except UnicodeDecodeError:
         return redirect(url_for("index"))
 
     reader = csv.DictReader(StringIO(content))
-    incidents = load_incidents()
-    existing_numbers = {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
+    replace_mode = import_mode == "replace"
+    incidents = [] if replace_mode else load_incidents()
+    existing_numbers = (
+        set() if replace_mode else {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
+    )
 
     last_year = None
     for row in reader:
@@ -446,6 +451,15 @@ def upload_key_file():
 
     with open(PRODUCT_KEY_FILE, "w") as f:
         json.dump(normalized, f, indent=2)
+
+    # Recalculate pillar assignments for all incidents using the new key
+    incidents = load_incidents()
+    if incidents:
+        for incident in incidents:
+            incident["pillar"] = resolve_pillar(
+                incident.get("product", ""), incident.get("pillar", ""), mapping=normalized
+            )
+        save_incidents(incidents)
 
     return redirect(url_for("index", key_uploaded=1))
 
