@@ -131,47 +131,72 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     const exportButtons = document.querySelectorAll(".export-calendar");
-    const severityDropdown = document.getElementById("severity-dropdown");
-    const severityToggle = document.getElementById("severity-dropdown-toggle");
-    const severityMenu = document.getElementById("severity-dropdown-menu");
-    const severitySelectionLabel = document.getElementById("severity-selection-label");
 
-    const updateSeverityLabel = () => {
-        if (!severityDropdown || !severitySelectionLabel) return;
-        const checked = severityDropdown.querySelectorAll("input[name='severity']:checked");
-        if (checked.length === 0) {
-            severitySelectionLabel.textContent = "All";
-            return;
+    const setupCheckboxDropdown = ({
+        dropdownId,
+        toggleId,
+        menuId,
+        selectionLabelId,
+        inputName,
+    }) => {
+        const dropdown = document.getElementById(dropdownId);
+        const toggle = document.getElementById(toggleId);
+        const menu = document.getElementById(menuId);
+        const selectionLabel = document.getElementById(selectionLabelId);
+
+        const updateLabel = () => {
+            if (!dropdown || !selectionLabel) return;
+            const checked = dropdown.querySelectorAll(`input[name='${inputName}']:checked`);
+            if (checked.length === 0) {
+                selectionLabel.textContent = "All";
+                return;
+            }
+
+            const values = Array.from(checked)
+                .map((input) => input.value)
+                .filter(Boolean);
+            selectionLabel.textContent = values.join(", ") || "All";
+        };
+
+        if (toggle && dropdown) {
+            toggle.addEventListener("click", (evt) => {
+                evt.preventDefault();
+                const isOpen = dropdown.classList.toggle("open");
+                toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            });
+
+            document.addEventListener("click", (evt) => {
+                if (!dropdown.contains(evt.target)) {
+                    dropdown.classList.remove("open");
+                    toggle.setAttribute("aria-expanded", "false");
+                }
+            });
+
+            menu?.addEventListener("change", (evt) => {
+                if (evt.target && evt.target.matches(`input[name='${inputName}']`)) {
+                    updateLabel();
+                }
+            });
+
+            updateLabel();
         }
-
-        const values = Array.from(checked)
-            .map((input) => input.value)
-            .filter(Boolean);
-        severitySelectionLabel.textContent = values.join(", ") || "All";
     };
 
-    if (severityToggle && severityDropdown) {
-        severityToggle.addEventListener("click", (evt) => {
-            evt.preventDefault();
-            const isOpen = severityDropdown.classList.toggle("open");
-            severityToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-        });
+    setupCheckboxDropdown({
+        dropdownId: "severity-dropdown",
+        toggleId: "severity-dropdown-toggle",
+        menuId: "severity-dropdown-menu",
+        selectionLabelId: "severity-selection-label",
+        inputName: "severity",
+    });
 
-        document.addEventListener("click", (evt) => {
-            if (!severityDropdown.contains(evt.target)) {
-                severityDropdown.classList.remove("open");
-                severityToggle.setAttribute("aria-expanded", "false");
-            }
-        });
-
-        severityMenu?.addEventListener("change", (evt) => {
-            if (evt.target && evt.target.matches("input[name='severity']")) {
-                updateSeverityLabel();
-            }
-        });
-
-        updateSeverityLabel();
-    }
+    setupCheckboxDropdown({
+        dropdownId: "event-type-dropdown",
+        toggleId: "event-type-dropdown-toggle",
+        menuId: "event-type-dropdown-menu",
+        selectionLabelId: "event-type-selection-label",
+        inputName: "event_type",
+    });
 
     const rebuildProductOptions = (allowedProducts) => {
         if (!productSelect) return;
