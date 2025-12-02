@@ -86,6 +86,67 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const exportButton = document.getElementById("export-calendar");
     const exportTarget = document.getElementById("calendar-export-target");
+    const severityDropdown = document.getElementById("severity-dropdown");
+    const severityToggle = document.getElementById("severity-dropdown-toggle");
+    const severityMenu = document.getElementById("severity-dropdown-menu");
+    const severitySelectionLabel = document.getElementById("severity-selection-label");
+
+    const updateSeverityLabel = () => {
+        if (!severityDropdown || !severitySelectionLabel) return;
+        const checked = severityDropdown.querySelectorAll("input[name='severity']:checked");
+        if (checked.length === 0) {
+            severitySelectionLabel.textContent = "All";
+            return;
+        }
+
+        const values = Array.from(checked)
+            .map((input) => input.value)
+            .filter(Boolean);
+        severitySelectionLabel.textContent = values.join(", ") || "All";
+    };
+
+    if (severityToggle && severityDropdown) {
+        severityToggle.addEventListener("click", (evt) => {
+            evt.preventDefault();
+            const isOpen = severityDropdown.classList.toggle("open");
+            severityToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+
+        document.addEventListener("click", (evt) => {
+            if (!severityDropdown.contains(evt.target)) {
+                severityDropdown.classList.remove("open");
+                severityToggle.setAttribute("aria-expanded", "false");
+            }
+        });
+
+        severityMenu?.addEventListener("change", (evt) => {
+            if (evt.target && evt.target.matches("input[name='severity']")) {
+                updateSeverityLabel();
+            }
+        });
+
+        updateSeverityLabel();
+    }
+
+    const buildStyleString = (computed) =>
+        Array.from(computed)
+            .map((prop) => `${prop}:${computed.getPropertyValue(prop)};`)
+            .join("");
+
+    const cloneNodeWithInlineStyles = (node) => {
+        const clone = node.cloneNode(false);
+
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const computed = window.getComputedStyle(node);
+            clone.setAttribute("style", buildStyleString(computed));
+        }
+
+        node.childNodes.forEach((child) => {
+            clone.appendChild(cloneNodeWithInlineStyles(child));
+        });
+
+        return clone;
+    };
 
     const buildStyleString = (computed) =>
         Array.from(computed)

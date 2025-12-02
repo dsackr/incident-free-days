@@ -164,9 +164,8 @@ def index():
     month_str = request.args.get("month")
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
-    severity_filter = [
-        value for value in request.args.getlist("severity") if value
-    ]
+    severity_params = [value for value in request.args.getlist("severity") if value]
+    severity_param_supplied = "severity" in request.args
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
@@ -193,6 +192,16 @@ def index():
     pillars = sorted({inc.get("pillar") for inc in incidents if inc.get("pillar")})
     products = sorted({inc.get("product") for inc in incidents if inc.get("product")})
     severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
+
+    if severity_params:
+        severity_filter = severity_params
+    else:
+        if severity_param_supplied:
+            severity_filter = []
+        else:
+            severity_filter = [
+                sev for sev in severities if sev and sev.lower() != "sev6"
+            ]
 
     if view_mode == "monthly":
         if month_selection is None:
@@ -249,13 +258,47 @@ def index():
         months = [months[month_selection - 1]]
 
     active_filters = []
+    def build_remove_link(kind, value=None):
+        params = {"view": view_mode, "year": year}
+        if month_selection:
+            params["month"] = month_selection
+
+        if kind != "pillar" and pillar_filter:
+            params["pillar"] = pillar_filter
+        if kind != "product" and product_filter:
+            params["product"] = product_filter
+
+        if kind == "severity":
+            remaining = [sev for sev in severity_filter if sev != value]
+            if remaining:
+                params["severity"] = remaining
+            elif severity_param_supplied:
+                params["severity"] = [""]
+        else:
+            if severity_filter:
+                params["severity"] = severity_filter
+            elif severity_param_supplied:
+                params["severity"] = [""]
+
+        return url_for("index", **params)
+
     if pillar_filter:
-        active_filters.append({"label": "Pillar", "value": pillar_filter})
+        active_filters.append(
+            {"label": "Pillar", "value": pillar_filter, "remove_link": build_remove_link("pillar")}
+        )
     if product_filter:
-        active_filters.append({"label": "Product", "value": product_filter})
+        active_filters.append(
+            {"label": "Product", "value": product_filter, "remove_link": build_remove_link("product")}
+        )
     if severity_filter:
         for severity in severity_filter:
-            active_filters.append({"label": "Severity", "value": severity})
+            active_filters.append(
+                {
+                    "label": "Severity",
+                    "value": severity,
+                    "remove_link": build_remove_link("severity", severity),
+                }
+            )
 
     def build_link(target_view, target_year, target_month=None):
         params = {"view": target_view, "year": target_year}
@@ -267,6 +310,8 @@ def index():
             params["product"] = product_filter
         if severity_filter:
             params["severity"] = severity_filter
+        elif severity_param_supplied:
+            params["severity"] = [""]
         return url_for("index", **params)
 
     if view_mode == "monthly" and month_selection:

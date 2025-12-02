@@ -82,12 +82,38 @@
 
                         <label>
                             Severity
-                            <select name="severity" multiple size="{{ [severities|length, 4]|min }}">
-                                {% for severity in severities %}
-                                <option value="{{ severity }}" {% if severity in severity_filter %}selected{% endif %}>{{ severity }}</option>
-                                {% endfor %}
-                            </select>
-                            <div class="helper-text">Hold Ctrl (or ⌘ on Mac) to select multiple severities.</div>
+                            <div class="dropdown severity-dropdown" id="severity-dropdown">
+                                <button
+                                    class="dropdown-toggle"
+                                    type="button"
+                                    id="severity-dropdown-toggle"
+                                    aria-haspopup="true"
+                                    aria-expanded="false"
+                                >
+                                    <span id="severity-selection-label">
+                                        {% if severity_filter %}
+                                            {{ severity_filter | join(', ') }}
+                                        {% else %}
+                                            All
+                                        {% endif %}
+                                    </span>
+                                    <span aria-hidden="true">▾</span>
+                                </button>
+                                <div class="dropdown-menu" id="severity-dropdown-menu" role="menu">
+                                    {% for severity in severities %}
+                                    <label class="checkbox-option">
+                                        <input
+                                            type="checkbox"
+                                            name="severity"
+                                            value="{{ severity }}"
+                                            {% if severity in severity_filter %}checked{% endif %}
+                                        />
+                                        {{ severity }}
+                                    </label>
+                                    {% endfor %}
+                                    <p class="helper-text small">Select one or more severities to display.</p>
+                                </div>
+                            </div>
                         </label>
 
                         <button type="submit">Apply</button>
@@ -99,7 +125,11 @@
                         <span class="filter-summary-label">Current filters:</span>
                         <div class="filter-chip-row">
                             {% for active_filter in active_filters %}
-                                <span class="filter-chip">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                                <a class="filter-chip removable" href="{{ active_filter.remove_link }}">
+                                    <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                                    <span class="filter-chip-close" aria-hidden="true">×</span>
+                                    <span class="sr-only">Remove {{ active_filter.label }} filter</span>
+                                </a>
                             {% endfor %}
                         </div>
                     {% else %}
