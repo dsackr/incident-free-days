@@ -422,4 +422,4 @@ def upload_key_file():
 
 if __name__ == "__main__":
     # For the Pi
-    app.run(host="0.0.0.0", port=5080, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=False)
