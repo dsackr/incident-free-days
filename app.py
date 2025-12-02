@@ -135,7 +135,8 @@ def build_calendar(year, incidents):
                 if iso in incidents_by_date:
                     incidents_for_day = incidents_by_date[iso]
                     sev6_only = all(
-                        is_sev6(inc.get("severity")) for inc in incidents_for_day
+                        (inc.get("severity", "").strip().lower() in {"sev6", "6"})
+                        for inc in incidents_for_day
                     )
 
                     css_class = "day-sev6" if sev6_only else "day-incident"
