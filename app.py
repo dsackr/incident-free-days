@@ -87,6 +87,20 @@ def parse_date(raw_value):
     return None
 
 
+def normalize_severity(value):
+    """Normalize severity labels for consistent comparisons."""
+    if value is None:
+        return ""
+
+    cleaned = "".join(ch for ch in str(value).lower() if ch.isalnum())
+    return cleaned
+
+
+def is_sev6(value):
+    normalized = normalize_severity(value)
+    return normalized in {"sev6", "6"}
+
+
 def build_calendar(year, incidents):
     """Return data structure describing all 12 months with color info per day."""
     # map YYYY-MM-DD -> list of incidents
