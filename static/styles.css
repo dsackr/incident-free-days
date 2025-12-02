@@ -475,6 +475,12 @@ h1 {
     margin-bottom: 10px;
 }
 
+.form-row.two-column {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 12px;
+}
+
 .form-row label {
     font-size: 13px;
     margin-bottom: 4px;
@@ -486,6 +492,13 @@ h1 {
     font-size: 13px;
     border: 1px solid #ccc;
     border-radius: 4px;
+}
+
+.checkbox-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-width: 180px;
 }
 
 .form-row button {

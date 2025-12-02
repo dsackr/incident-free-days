@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 import csv
 import calendar
 import json
@@ -87,24 +87,96 @@ def parse_date(raw_value):
     return None
 
 
+def parse_time_component(raw_value):
+    if not raw_value:
+        return None
+
+    raw_value = raw_value.strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw_value, fmt).time()
+        except ValueError:
+            continue
+
+    try:
+        return time.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
+def parse_datetime(raw_value):
+    if not raw_value:
+        return None
+
+    raw_value = raw_value.strip()
+    candidates = [raw_value]
+    if raw_value.endswith("Z"):
+        candidates.append(raw_value[:-1] + "+00:00")
+
+    for value in candidates:
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%d %H:%M:%S%z",
+            "%m/%d/%Y %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+        ):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            continue
+
+    return None
+
+
 def is_sev6(value):
     return str(value) == "Other (Sev 6)"
 
 
-def build_calendar(year, incidents):
-    """Return data structure describing all 12 months with color info per day."""
-    # map YYYY-MM-DD -> list of incidents
-    incidents_by_date = {}
-    for inc in incidents:
-        try:
-            d = datetime.strptime(inc["date"], "%Y-%m-%d").date()
-        except (KeyError, TypeError, ValueError):
-            continue
-        if d.year != year:
-            continue
-        key = d.isoformat()
-        incidents_by_date.setdefault(key, []).append(inc)
+def compute_incident_dates(incident, duration_enabled=False):
+    """Return a list of dates covered by an incident.
 
+    When duration is enabled, dates include the start date and any following
+    dates reached by the provided duration. Without duration, only the start
+    date is returned.
+    """
+
+    try:
+        start_date = datetime.strptime(incident.get("date", ""), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return []
+
+    start_time_value = parse_time_component(incident.get("start_time"))
+    start_dt = datetime.combine(start_date, start_time_value or time.min)
+
+    try:
+        duration_minutes = int(incident.get("duration_minutes", 0) or 0)
+    except (TypeError, ValueError):
+        duration_minutes = 0
+
+    if not duration_enabled or duration_minutes <= 0:
+        return [start_date]
+
+    end_dt = start_dt + timedelta(minutes=max(duration_minutes, 0))
+    end_date = max(end_dt.date(), start_date)
+
+    days = []
+    current = start_date
+    while current <= end_date:
+        days.append(current)
+        current += timedelta(days=1)
+
+    return days
+
+
+def build_calendar(year, incidents_by_date):
+    """Return data structure describing all 12 months with color info per day."""
     today = date.today()
     cal = calendar.Calendar(firstweekday=6)  # Sunday = 6
 
@@ -153,16 +225,6 @@ def build_calendar(year, incidents):
     return months
 
 
-def group_incidents_by_date(incidents):
-    grouped = {}
-    for inc in incidents:
-        date_value = inc.get("date")
-        if not date_value:
-            continue
-        grouped.setdefault(date_value, []).append(inc)
-    return grouped
-
-
 def resolve_pillar(product, provided_pillar="", mapping=None):
     mapping = mapping if mapping is not None else load_product_key()
     product_key = (product or "").strip()
@@ -180,6 +242,8 @@ def index():
     year_str = request.args.get("year")
     view_mode = request.args.get("view", "yearly")
     month_str = request.args.get("month")
+    duration_enabled = request.args.get("duration") == "1"
+    multi_day_only = duration_enabled and request.args.get("multi_day") == "1"
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
     severity_params = [value for value in request.args.getlist("severity") if value]
@@ -268,6 +332,7 @@ def index():
         month_selection = None
 
     incidents_filtered = []
+    incidents_by_date = {}
     incident_dates = set()
     for inc in incidents:
         if pillar_filter and inc.get("pillar") != pillar_filter:
@@ -279,22 +344,31 @@ def index():
         ):
             continue
 
-        try:
-            inc_date = datetime.strptime(inc.get("date", ""), "%Y-%m-%d").date()
-        except (TypeError, ValueError):
+        covered_dates = compute_incident_dates(inc, duration_enabled)
+        if not covered_dates:
+            continue
+
+        if multi_day_only and len(set(covered_dates)) < 2:
             continue
 
         in_month_view = view_mode == "monthly" and month_selection
         if in_month_view:
-            if not (inc_date.year == year and inc_date.month == month_selection):
-                continue
+            covered_dates = [
+                d for d in covered_dates if d.year == year and d.month == month_selection
+            ]
         else:
-            if inc_date.year != year:
-                continue
+            covered_dates = [d for d in covered_dates if d.year == year]
+
+        if not covered_dates:
+            continue
 
         incidents_filtered.append(inc)
-        if not is_sev6(inc.get("severity")):
-            incident_dates.add(inc_date)
+
+        for d in covered_dates:
+            iso = d.isoformat()
+            incidents_by_date.setdefault(iso, []).append(inc)
+            if not is_sev6(inc.get("severity")):
+                incident_dates.add(d)
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
@@ -309,8 +383,7 @@ def index():
 
     incident_free_days = max(days_in_range - len(days_with_incidents), 0)
 
-    months = build_calendar(year, incidents_filtered)
-    incidents_by_date = group_incidents_by_date(incidents_filtered)
+    months = build_calendar(year, incidents_by_date)
 
     if view_mode == "monthly" and month_selection:
         months = [months[month_selection - 1]]
@@ -320,6 +393,10 @@ def index():
         params = {"view": view_mode, "year": year}
         if month_selection:
             params["month"] = month_selection
+        if duration_enabled:
+            params["duration"] = "1"
+        if multi_day_only:
+            params["multi_day"] = "1"
 
         if kind != "pillar" and pillar_filter:
             params["pillar"] = pillar_filter
@@ -362,6 +439,10 @@ def index():
         params = {"view": target_view, "year": target_year}
         if target_month:
             params["month"] = target_month
+        if duration_enabled:
+            params["duration"] = "1"
+        if multi_day_only:
+            params["multi_day"] = "1"
         if pillar_filter:
             params["pillar"] = pillar_filter
         if product_filter:
@@ -427,6 +508,8 @@ def index():
         current_period_label=current_period_label,
         yearly_view_link=yearly_view_link,
         monthly_view_link=monthly_view_link,
+        duration_enabled=duration_enabled,
+        multi_day_only=multi_day_only,
         key_present=key_present,
         key_missing=key_missing,
         key_uploaded=key_uploaded,
@@ -438,6 +521,8 @@ def index():
 def add_incident():
     inc_number = request.form.get("inc_number", "").strip()
     raw_date = request.form.get("date", "").strip()
+    start_time_raw = request.form.get("start_time", "").strip()
+    duration_raw = request.form.get("duration_minutes", "").strip()
     severity = request.form.get("severity", "").strip()
     product = request.form.get("product", "").strip()
 
@@ -457,10 +542,19 @@ def add_incident():
 
     pillar = resolve_pillar(product)
 
+    start_time_value = parse_time_component(start_time_raw)
+
+    try:
+        duration_minutes = int(duration_raw) if duration_raw else 0
+    except ValueError:
+        duration_minutes = 0
+
     incidents.append(
         {
             "inc_number": inc_number,
             "date": parsed_date.isoformat(),
+            "start_time": start_time_value.strftime("%H:%M") if start_time_value else "",
+            "duration_minutes": duration_minutes,
             "severity": severity,
             "pillar": pillar,
             "product": product,
@@ -501,23 +595,31 @@ def upload_csv():
         inc_number = (row.get("ID") or "").strip()
         severity = (row.get("Severity") or "").strip()
         product_raw = (row.get("Product") or "").strip()
-        raw_date = (row.get("Reported at") or "").strip()
+        raw_reported_at = (row.get("Reported at") or "").strip()
+        raw_duration = (row.get("Client Impact Duration") or "").strip()
 
-        parsed_date = parse_date(raw_date)
-        if not inc_number or parsed_date is None:
+        reported_dt = parse_datetime(raw_reported_at)
+        if not inc_number or reported_dt is None:
             continue
 
         if inc_number in existing_numbers:
             continue
 
-        last_year = parsed_date.year
+        last_year = reported_dt.year
         product = product_raw.split(",")[0].strip() if product_raw else ""
         pillar = resolve_pillar(product, mapping=mapping)
+
+        try:
+            duration_minutes = int(raw_duration) if raw_duration else 0
+        except ValueError:
+            duration_minutes = 0
 
         incidents.append(
             {
                 "inc_number": inc_number,
-                "date": parsed_date.isoformat(),
+                "date": reported_dt.date().isoformat(),
+                "start_time": reported_dt.strftime("%H:%M"),
+                "duration_minutes": duration_minutes,
                 "severity": severity,
                 "pillar": pillar,
                 "product": product,

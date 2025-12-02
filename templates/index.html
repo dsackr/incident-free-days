@@ -125,6 +125,27 @@
                             </div>
                         </label>
 
+                        <label class="checkbox-inline">
+                            <input
+                                type="checkbox"
+                                name="duration"
+                                value="1"
+                                {% if duration_enabled %}checked{% endif %}
+                            />
+                            Include incident duration
+                        </label>
+
+                        <label class="checkbox-inline">
+                            <input
+                                type="checkbox"
+                                name="multi_day"
+                                value="1"
+                                {% if multi_day_only %}checked{% endif %}
+                                {% if not duration_enabled %}disabled{% endif %}
+                            />
+                            Show only multi-day incidents
+                        </label>
+
                         <button type="submit">Apply</button>
                     </div>
                 </form>
@@ -266,6 +287,21 @@
                     <label for="date">Date</label>
                     <!-- HTML date input (YYYY-MM-DD); backend also accepts MM/DD/YYYY -->
                     <input type="date" id="date" name="date" required />
+                </div>
+
+                <div class="form-row two-column">
+                    <label for="start_time">Start time (optional)</label>
+                    <input type="time" id="start_time" name="start_time" />
+
+                    <label for="duration_minutes">Duration (minutes)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        id="duration_minutes"
+                        name="duration_minutes"
+                        placeholder="0"
+                    />
                 </div>
 
                 <div class="form-row">

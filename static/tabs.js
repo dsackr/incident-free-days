@@ -67,9 +67,17 @@ document.addEventListener("DOMContentLoaded", function () {
                     )}`;
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
+                const extraMeta = [];
+                if (inc.start_time) {
+                    extraMeta.push(`Start: ${inc.start_time}`);
+                }
+                if (inc.duration_minutes) {
+                    extraMeta.push(`Duration: ${inc.duration_minutes} min`);
+                }
+                const extraMetaText = extraMeta.length ? ` · ${extraMeta.join(" · ")}` : "";
                 row.innerHTML = `
                     <p class="incident-title">${incidentTitle()}</p>
-                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}</p>
+                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}${extraMetaText}</p>
                 `;
                 modalBody.appendChild(row);
             });
