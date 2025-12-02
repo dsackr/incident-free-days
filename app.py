@@ -227,6 +227,28 @@ def incident_exists(incidents, inc_number):
     return any(inc.get("inc_number") == inc_number for inc in incidents)
 
 
+def get_client_ip(req):
+    """Extract the client's IP address from the request.
+
+    Priority is given to the first value in X-Forwarded-For, followed by
+    X-Real-IP, and finally Flask's remote_addr. The value is normalized by
+    stripping whitespace and falling back to "Unknown" when no candidate is
+    available.
+    """
+
+    forwarded_for = req.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        first_ip = forwarded_for.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+
+    real_ip = (req.headers.get("X-Real-IP") or "").strip()
+    if real_ip:
+        return real_ip
+
+    return (req.remote_addr or "Unknown").strip()
+
+
 @app.route("/", methods=["GET"])
 def index():
     year_str = request.args.get("year")
@@ -592,6 +614,8 @@ def index():
         reverse=True,
     )
 
+    client_ip = get_client_ip(request)
+
     return render_template(
         "index.html",
         year=year,
@@ -630,6 +654,7 @@ def index():
         key_uploaded=key_uploaded,
         key_error=key_error,
         active_tab=active_tab,
+        client_ip=client_ip,
     )
 
 
