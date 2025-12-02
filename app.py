@@ -135,6 +135,13 @@ def parse_datetime(raw_value):
     return None
 
 
+def shift_utc_to_est(dt):
+    if dt is None:
+        return None
+
+    return dt - timedelta(hours=5)
+
+
 def is_sev6(value):
     return str(value) == "Other (Sev 6)"
 
@@ -781,8 +788,8 @@ def upload_csv():
         raw_duration = (row.get("Client Impact Duration") or "").strip()
         event_type = (row.get("Incident Type") or "Operational Incident").strip()
 
-        reported_dt = parse_datetime(raw_reported_at)
-        closed_dt = parse_datetime(raw_closed_at)
+        reported_dt = shift_utc_to_est(parse_datetime(raw_reported_at))
+        closed_dt = shift_utc_to_est(parse_datetime(raw_closed_at))
         if not inc_number or reported_dt is None:
             continue
 
