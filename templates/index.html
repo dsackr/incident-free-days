@@ -24,21 +24,6 @@
 
         <div id="incidents-tab" class="tab-content {% if active_tab == 'incidents' %}active{% endif %}">
             <div id="incident-export-target">
-                <div class="legend">
-                    <span class="legend-item">
-                        <span class="legend-color legend-grey"></span> No data / future
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-green"></span> No incident
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-yellow"></span> Sev6 incident
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-red"></span> Incident occurred
-                    </span>
-                </div>
-
                 <div class="calendar-header">
                     <div class="calendar-nav">
                         <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
@@ -172,6 +157,21 @@
                 <div class="incident-metrics">
                     <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
                     <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
+                </div>
+
+                <div class="legend">
+                    <span class="legend-item">
+                        <span class="legend-color legend-grey"></span> No data / future
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-green"></span> No incident
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-yellow"></span> Sev6 incident
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-red"></span> Incident occurred
+                    </span>
                 </div>
 
                 <div class="months-grid {% if incident_months|length == 1 %}single-column{% endif %}">
