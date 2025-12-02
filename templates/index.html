@@ -81,6 +81,16 @@
                             </select>
                         </label>
 
+                        <label>
+                            Severity
+                            <select name="severity">
+                                <option value="">All</option>
+                                {% for severity in severities %}
+                                <option value="{{ severity }}" {% if severity_filter == severity %}selected{% endif %}>{{ severity }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
                         <button type="submit">Apply</button>
                     </div>
                 </form>
@@ -97,6 +107,8 @@
                         <span class="filter-summary-label">Current filters: All</span>
                     {% endif %}
                 </div>
+
+                <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
 
                 <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
                     {% for month in months %}

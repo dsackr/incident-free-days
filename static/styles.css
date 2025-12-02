@@ -238,6 +238,12 @@ h1 {
     color: #2f3b4c;
 }
 
+.incident-count {
+    font-weight: 700;
+    color: #1f2a3b;
+    margin: 4px 0 12px;
+}
+
 .upload-panel {
     border: 1px dashed #cfd8e3;
     padding: 12px;

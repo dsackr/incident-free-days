@@ -164,6 +164,7 @@ def index():
     month_str = request.args.get("month")
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
+    severity_filter = request.args.get("severity") or None
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
@@ -189,6 +190,7 @@ def index():
     # Build filter choices
     pillars = sorted({inc.get("pillar") for inc in incidents if inc.get("pillar")})
     products = sorted({inc.get("product") for inc in incidents if inc.get("product")})
+    severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
 
     incidents_filtered = []
     for inc in incidents:
@@ -196,7 +198,13 @@ def index():
             continue
         if product_filter and inc.get("product") != product_filter:
             continue
+        if severity_filter and inc.get("severity") != severity_filter:
+            continue
         incidents_filtered.append(inc)
+
+    unique_incident_count = len(
+        {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
+    )
 
     months = build_calendar(year, incidents_filtered)
     incidents_by_date = group_incidents_by_date(incidents_filtered)
@@ -217,6 +225,8 @@ def index():
         active_filters.append({"label": "Pillar", "value": pillar_filter})
     if product_filter:
         active_filters.append({"label": "Product", "value": product_filter})
+    if severity_filter:
+        active_filters.append({"label": "Severity", "value": severity_filter})
 
     def build_link(target_view, target_year, target_month=None):
         params = {"view": target_view, "year": target_year}
@@ -226,6 +236,8 @@ def index():
             params["pillar"] = pillar_filter
         if product_filter:
             params["product"] = product_filter
+        if severity_filter:
+            params["severity"] = severity_filter
         return url_for("index", **params)
 
     if view_mode == "monthly" and month_selection:
@@ -267,11 +279,14 @@ def index():
         month_selection=month_selection,
         pillars=pillars,
         products=products,
+        severities=severities,
         pillar_filter=pillar_filter,
         product_filter=product_filter,
+        severity_filter=severity_filter,
         calendar=calendar,
         incidents_by_date=incidents_by_date,
         active_filters=active_filters,
+        incident_count=unique_incident_count,
         prev_link=prev_link,
         next_link=next_link,
         current_period_label=current_period_label,
