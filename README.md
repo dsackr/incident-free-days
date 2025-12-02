@@ -20,7 +20,7 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    ```bash
    python app.py
    ```
-   The server listens on `http://0.0.0.0:5080/`.
+   The server listens on `http://0.0.0.0:8080/`.
 
 ### Run as a system service (systemd)
 1. **Create a dedicated user** (optional but recommended)
