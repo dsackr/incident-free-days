@@ -115,9 +115,9 @@
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
-                                name="duration"
+                                name="incident_duration"
                                 value="1"
-                                {% if duration_enabled %}checked{% endif %}
+                                {% if incident_duration_enabled %}checked{% endif %}
                             />
                             Include incident duration
                         </label>
@@ -125,10 +125,10 @@
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
-                                name="multi_day"
+                                name="incident_multi_day"
                                 value="1"
-                                {% if multi_day_only %}checked{% endif %}
-                                {% if not duration_enabled %}disabled{% endif %}
+                                {% if incident_multi_day_only %}checked{% endif %}
+                                {% if not incident_duration_enabled %}disabled{% endif %}
                             />
                             Show only multi-day incidents
                         </label>
@@ -209,16 +209,6 @@
                 </div>
             </div>
 
-            <div class="modal" id="incident-modal" aria-hidden="true" role="dialog">
-                <div class="modal-backdrop" id="incident-modal-backdrop"></div>
-                <div class="modal-content" role="document">
-                    <div class="modal-header">
-                        <h3 id="incident-modal-date">Incidents</h3>
-                        <button type="button" class="modal-close" id="incident-modal-close" aria-label="Close">×</button>
-                    </div>
-                    <div id="incident-modal-body" class="modal-body"></div>
-                </div>
-            </div>
         </div>
 
         <div id="others-tab" class="tab-content {% if active_tab == 'others' %}active{% endif %}">
@@ -319,9 +309,9 @@
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
-                                name="duration"
+                                name="other_duration"
                                 value="1"
-                                {% if duration_enabled %}checked{% endif %}
+                                {% if other_duration_enabled %}checked{% endif %}
                             />
                             Include event duration
                         </label>
@@ -329,10 +319,10 @@
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
-                                name="multi_day"
+                                name="other_multi_day"
                                 value="1"
-                                {% if multi_day_only %}checked{% endif %}
-                                {% if not duration_enabled %}disabled{% endif %}
+                                {% if other_multi_day_only %}checked{% endif %}
+                                {% if not other_duration_enabled %}disabled{% endif %}
                             />
                             Show only multi-day events
                         </label>
@@ -531,6 +521,17 @@
                 </div>
             </form>
 
+        </div>
+    </div>
+
+    <div class="modal" id="incident-modal" aria-hidden="true" role="dialog">
+        <div class="modal-backdrop" id="incident-modal-backdrop"></div>
+        <div class="modal-content" role="document">
+            <div class="modal-header">
+                <h3 id="incident-modal-date">Incidents</h3>
+                <button type="button" class="modal-close" id="incident-modal-close" aria-label="Close">×</button>
+            </div>
+            <div id="incident-modal-body" class="modal-body"></div>
         </div>
     </div>
 
