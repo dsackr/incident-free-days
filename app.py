@@ -255,9 +255,7 @@ def index():
         if severity_param_supplied:
             severity_filter = []
         else:
-            severity_filter = [
-                sev for sev in severities if sev and sev.lower() != "sev6"
-            ]
+            severity_filter = [sev for sev in severities if sev and not is_sev6(sev)]
 
     if product_filter:
         resolved_pillar = product_pillar_map.get(product_filter) or resolve_pillar(
@@ -287,7 +285,11 @@ def index():
             continue
         if product_filter and inc.get("product") != product_filter:
             continue
-        if severity_filter and inc.get("severity") not in severity_filter:
+        if severity_filter and not any(
+            normalize_severity(inc.get("severity"))
+            == normalize_severity(selected)
+            for selected in severity_filter
+        ):
             continue
 
         try:
@@ -304,7 +306,8 @@ def index():
                 continue
 
         incidents_filtered.append(inc)
-        incident_dates.add(inc_date)
+        if not is_sev6(inc.get("severity")):
+            incident_dates.add(inc_date)
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
