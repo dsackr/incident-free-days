@@ -90,6 +90,10 @@ h1 {
     background: #f9a825;
 }
 
+.legend-orange {
+    background: #f57c00;
+}
+
 .control-form {
     background: #f9fbfd;
     border: 1px solid #d9e5f4;
@@ -446,6 +450,26 @@ h1 {
 .day-sev6 {
     background: #f9a825; /* yellow for Sev6 */
     color: #1f2a3b;
+}
+
+.day-war-room {
+    background: #c62828; /* red */
+    color: #ffffff;
+}
+
+.day-deployment {
+    background: #f57c00; /* orange */
+    color: #ffffff;
+}
+
+.day-operational-event {
+    background: #f9a825; /* yellow */
+    color: #1f2a3b;
+}
+
+.day-other-event {
+    background: #6c7a89; /* muted blue-grey */
+    color: #ffffff;
 }
 
 .day-cell {

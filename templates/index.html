@@ -17,12 +17,13 @@
         <h1>{{ year }} Incident Free Days</h1>
 
         <div class="tabs">
-            <button class="tab-button active" data-tab="calendar-tab">Calendar</button>
-            <button class="tab-button" data-tab="form-tab">Report Incident</button>
+            <button class="tab-button {% if active_tab == 'incidents' %}active{% endif %}" data-tab="incidents-tab">Incidents</button>
+            <button class="tab-button {% if active_tab == 'others' %}active{% endif %}" data-tab="others-tab">Other Events</button>
+            <button class="tab-button {% if active_tab == 'form' %}active{% endif %}" data-tab="form-tab">Report Incident</button>
         </div>
 
-        <div id="calendar-tab" class="tab-content active">
-            <div id="calendar-export-target">
+        <div id="incidents-tab" class="tab-content {% if active_tab == 'incidents' %}active{% endif %}">
+            <div id="incident-export-target">
                 <div class="legend">
                     <span class="legend-item">
                         <span class="legend-color legend-grey"></span> No data / future
@@ -51,11 +52,11 @@
                         </div>
                         <button
                             type="button"
-                            id="export-calendar"
-                            class="secondary-button"
+                            class="secondary-button export-calendar"
                             data-view-mode="{{ view_mode }}"
                             data-year="{{ year }}"
                             data-month-name="{{ calendar.month_name[month_selection] if month_selection else '' }}"
+                            data-target="incident-export-target"
                         >
                             Export as Image
                         </button>
@@ -65,6 +66,7 @@
                 <form class="control-form" method="GET" action="{{ url_for('index') }}">
                     <input type="hidden" name="year" value="{{ year }}" />
                     <input type="hidden" name="view" value="{{ view_mode }}" />
+                    <input type="hidden" name="tab" value="incidents" />
                     {% if month_selection %}
                     <input type="hidden" name="month" value="{{ month_selection }}" />
                     {% endif %}
@@ -87,6 +89,16 @@
                                 <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
                                 {% endfor %}
                             </select>
+                        </label>
+
+                        <label>
+                            Event Type
+                            <select name="event_type" multiple size="{{ [event_types|length, 4]|max }}">
+                                {% for event_type in event_types %}
+                                <option value="{{ event_type }}" {% if event_type in event_type_filter %}selected{% endif %}>{{ event_type }}</option>
+                                {% endfor %}
+                            </select>
+                            <span class="helper-text small">Hold Ctrl/Cmd to select multiple.</span>
                         </label>
 
                         <label>
@@ -172,8 +184,8 @@
                     <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
                 </div>
 
-                <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
-                    {% for month in months %}
+                <div class="months-grid {% if incident_months|length == 1 %}single-column{% endif %}">
+                    {% for month in incident_months %}
                     <div class="month">
                         <div class="month-name">{{ month.name }}</div>
                         <table class="month-table">
@@ -193,7 +205,7 @@
                                 <tr>
                                     {% for day in week %}
                                     {% if day.day %}
-                                        <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}">{{ day.day }}</td>
+                                        <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="incidents">{{ day.day }}</td>
                                     {% else %}
                                         <td class="{{ day.css_class }}"></td>
                                     {% endif %}
@@ -219,7 +231,150 @@
             </div>
         </div>
 
-        <div id="form-tab" class="tab-content">
+        <div id="others-tab" class="tab-content {% if active_tab == 'others' %}active{% endif %}">
+            <div id="other-export-target">
+                <div class="legend">
+                    <span class="legend-item">
+                        <span class="legend-color legend-grey"></span> No event
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-yellow"></span> Operational Event
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-orange"></span> Deployment Event
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color legend-red"></span> War Room
+                    </span>
+                </div>
+
+                <div class="calendar-header">
+                    <div class="calendar-nav">
+                        <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
+                        <div class="current-period">{{ current_period_label }}</div>
+                        <a class="icon-button" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
+                    </div>
+                    <div class="calendar-actions">
+                        <div class="view-toggle" role="group" aria-label="Calendar view toggle">
+                            <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                            <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                        </div>
+                    </div>
+                </div>
+
+                <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                    <input type="hidden" name="year" value="{{ year }}" />
+                    <input type="hidden" name="view" value="{{ view_mode }}" />
+                    <input type="hidden" name="tab" value="others" />
+                    {% if month_selection %}
+                    <input type="hidden" name="month" value="{{ month_selection }}" />
+                    {% endif %}
+                    <div class="control-row">
+                        <label>
+                            Pillar
+                            <select name="pillar">
+                                <option value="">All</option>
+                                {% for pillar in pillars %}
+                                <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
+                        <label>
+                            Product
+                            <select name="product">
+                                <option value="">All</option>
+                                {% for product in products %}
+                                <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
+                        <label>
+                            Event Type
+                            <select name="event_type" multiple size="{{ [event_types|length, 4]|max }}">
+                                {% for event_type in event_types %}
+                                <option value="{{ event_type }}" {% if event_type in event_type_filter %}selected{% endif %}>{{ event_type }}</option>
+                                {% endfor %}
+                            </select>
+                            <span class="helper-text small">Hold Ctrl/Cmd to select multiple.</span>
+                        </label>
+
+                        <label class="checkbox-inline">
+                            <input
+                                type="checkbox"
+                                name="duration"
+                                value="1"
+                                {% if duration_enabled %}checked{% endif %}
+                            />
+                            Include event duration
+                        </label>
+
+                        <label class="checkbox-inline">
+                            <input
+                                type="checkbox"
+                                name="multi_day"
+                                value="1"
+                                {% if multi_day_only %}checked{% endif %}
+                                {% if not duration_enabled %}disabled{% endif %}
+                            />
+                            Show only multi-day events
+                        </label>
+
+                        <button type="submit">Apply</button>
+                    </div>
+                </form>
+
+                <div class="months-grid {% if other_months|length == 1 %}single-column{% endif %}">
+                    {% for month in other_months %}
+                    <div class="month">
+                        <div class="month-name">{{ month.name }}</div>
+                        <table class="month-table">
+                            <thead>
+                                <tr>
+                                    <th>S</th>
+                                    <th>M</th>
+                                    <th>T</th>
+                                    <th>W</th>
+                                    <th>T</th>
+                                    <th>F</th>
+                                    <th>S</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for week in month.weeks %}
+                                <tr>
+                                    {% for day in week %}
+                                    {% if day.day %}
+                                        <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="others">{{ day.day }}</td>
+                                    {% else %}
+                                        <td class="{{ day.css_class }}"></td>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="calendar-actions">
+                    <button
+                        type="button"
+                        class="secondary-button export-calendar"
+                        data-view-mode="{{ view_mode }}"
+                        data-year="{{ year }}"
+                        data-month-name="{{ calendar.month_name[month_selection] if month_selection else '' }}"
+                        data-target="other-export-target"
+                    >
+                        Export as Image
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="form-tab" class="tab-content {% if active_tab == 'form' %}active{% endif %}">
             <h2>Report Incident</h2>
 
             {% if key_missing %}
@@ -290,16 +445,24 @@
                 </div>
 
                 <div class="form-row two-column">
-                    <label for="start_time">Start time (optional)</label>
+                    <label for="start_time">Reported at (time)</label>
                     <input type="time" id="start_time" name="start_time" />
 
-                    <label for="duration_minutes">Duration (minutes)</label>
+                    <label for="closed_time">Closed at (time)</label>
+                    <input type="time" id="closed_time" name="closed_time" />
+                </div>
+
+                <div class="form-row two-column">
+                    <label for="closed_date">Closed at (date)</label>
+                    <input type="date" id="closed_date" name="closed_date" />
+
+                    <label for="duration_seconds">Duration (seconds)</label>
                     <input
                         type="number"
                         min="0"
                         step="1"
-                        id="duration_minutes"
-                        name="duration_minutes"
+                        id="duration_seconds"
+                        name="duration_seconds"
                         placeholder="0"
                     />
                 </div>
@@ -312,6 +475,16 @@
                         <option value="2">2 - High</option>
                         <option value="3">3 - Medium</option>
                         <option value="6">6 - Low</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <label for="event_type">Event Type</label>
+                    <select id="event_type" name="event_type">
+                        <option value="Operational Incident">Operational Incident</option>
+                        <option value="Operational Event">Operational Event</option>
+                        <option value="Deployment Event">Deployment Event</option>
+                        <option value="War Room">War Room</option>
                     </select>
                 </div>
 
@@ -329,6 +502,7 @@
     </div>
 
     <script id="incident-data" type="application/json">{{ incidents_by_date|tojson }}</script>
+    <script id="other-data" type="application/json">{{ other_by_date|tojson }}</script>
     <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
     <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
 </body>

@@ -15,7 +15,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     const incidentDataEl = document.getElementById("incident-data");
+    const otherDataEl = document.getElementById("other-data");
     let incidentsByDate = {};
+    let otherEventsByDate = {};
 
     if (incidentDataEl) {
         try {
@@ -24,6 +26,19 @@ document.addEventListener("DOMContentLoaded", function () {
             incidentsByDate = {};
         }
     }
+
+    if (otherDataEl) {
+        try {
+            otherEventsByDate = JSON.parse(otherDataEl.textContent || "{}");
+        } catch (err) {
+            otherEventsByDate = {};
+        }
+    }
+
+    const eventsByKind = {
+        incidents: incidentsByDate,
+        others: otherEventsByDate,
+    };
 
     const readJsonFromScript = (elementId) => {
         const el = document.getElementById(elementId);
@@ -48,11 +63,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const modalClose = document.getElementById("incident-modal-close");
     const modalBackdrop = document.getElementById("incident-modal-backdrop");
 
-    const renderModal = (dateStr, incidents) => {
-        modalDateEl.textContent = `Incidents on ${dateStr}`;
+    const renderModal = (kind, dateStr, incidents) => {
+        modalDateEl.textContent = `${kind === "incidents" ? "Incidents" : "Events"} on ${dateStr}`;
 
         if (!incidents || incidents.length === 0) {
-            modalBody.innerHTML = `<p>No incidents recorded for ${dateStr}.</p>`;
+            modalBody.innerHTML = `<p>No records for ${dateStr}.</p>`;
         } else {
             modalBody.innerHTML = "";
             incidents.forEach((inc) => {
@@ -68,16 +83,20 @@ document.addEventListener("DOMContentLoaded", function () {
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
                 const extraMeta = [];
-                if (inc.start_time) {
-                    extraMeta.push(`Start: ${inc.start_time}`);
+                if (inc.reported_at) {
+                    extraMeta.push(`Reported: ${inc.reported_at}`);
                 }
-                if (inc.duration_minutes) {
-                    extraMeta.push(`Duration: ${inc.duration_minutes} min`);
+                if (inc.closed_at) {
+                    extraMeta.push(`Closed: ${inc.closed_at}`);
+                }
+                if (inc.duration_seconds) {
+                    extraMeta.push(`Duration: ${inc.duration_seconds} sec`);
                 }
                 const extraMetaText = extraMeta.length ? ` · ${extraMeta.join(" · ")}` : "";
+                const eventType = inc.event_type ? ` · Type: ${inc.event_type}` : "";
                 row.innerHTML = `
                     <p class="incident-title">${incidentTitle()}</p>
-                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}${extraMetaText}</p>
+                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}${eventType}${extraMetaText}</p>
                 `;
                 modalBody.appendChild(row);
             });
@@ -95,9 +114,11 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll("td[data-date]").forEach((cell) => {
         cell.addEventListener("click", () => {
             const dateStr = cell.getAttribute("data-date");
+            const kind = cell.getAttribute("data-calendar-kind") || "incidents";
             if (!dateStr) return;
-            const incidents = incidentsByDate[dateStr] || [];
-            renderModal(dateStr, incidents);
+            const source = eventsByKind[kind] || {};
+            const incidents = source[dateStr] || [];
+            renderModal(kind, dateStr, incidents);
         });
     });
 
@@ -109,8 +130,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    const exportButton = document.getElementById("export-calendar");
-    const exportTarget = document.getElementById("calendar-export-target");
+    const exportButtons = document.querySelectorAll(".export-calendar");
     const severityDropdown = document.getElementById("severity-dropdown");
     const severityToggle = document.getElementById("severity-dropdown-toggle");
     const severityMenu = document.getElementById("severity-dropdown-menu");
@@ -233,7 +253,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return clone;
     };
 
-    const renderWithInlineSvg = async () => {
+    const renderWithInlineSvg = async (exportTarget) => {
         if (!exportTarget) return null;
 
         let svgUrl = null;
@@ -273,7 +293,7 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     };
 
-    const renderWithHtml2Canvas = async () => {
+    const renderWithHtml2Canvas = async (exportTarget) => {
         if (typeof html2canvas !== "function" || !exportTarget) return null;
 
         const snapshot = await html2canvas(exportTarget, {
@@ -285,7 +305,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return { canvas: snapshot };
     };
 
-    const exportCalendar = async () => {
+    const exportCalendar = async (exportButton) => {
+        const targetId = exportButton?.dataset?.target;
+        const exportTarget = targetId ? document.getElementById(targetId) : null;
         if (!exportButton || !exportTarget) return;
 
         let cleanup = null;
@@ -294,7 +316,7 @@ document.addEventListener("DOMContentLoaded", function () {
         exportButton.textContent = "Exporting...";
 
         try {
-            const html2canvasResult = await renderWithHtml2Canvas();
+            const html2canvasResult = await renderWithHtml2Canvas(exportTarget);
             let source = null;
 
             if (html2canvasResult?.canvas) {
@@ -305,7 +327,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         ctx.drawImage(html2canvasResult.canvas, dx, dy, drawWidth, drawHeight),
                 };
             } else {
-                const svgResult = await renderWithInlineSvg();
+                const svgResult = await renderWithInlineSvg(exportTarget);
                 cleanup = svgResult?.cleanup;
 
                 if (svgResult?.image) {
@@ -363,5 +385,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
-    exportButton?.addEventListener("click", exportCalendar);
+    exportButtons.forEach((btn) => {
+        btn.addEventListener("click", () => exportCalendar(btn));
+    });
 });
