@@ -41,8 +41,17 @@ document.addEventListener("DOMContentLoaded", function () {
             incidents.forEach((inc) => {
                 const row = document.createElement("div");
                 row.className = "incident-row";
+                const incidentTitle = () => {
+                    const label = inc.inc_number || "Incident";
+                    if (!inc.inc_number) return label;
+
+                    const url = `https://app.incident.io/myfrontline/incidents/${encodeURIComponent(
+                        inc.inc_number
+                    )}`;
+                    return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+                };
                 row.innerHTML = `
-                    <p class="incident-title">${inc.inc_number || "Incident"}</p>
+                    <p class="incident-title">${incidentTitle()}</p>
                     <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}</p>
                 `;
                 modalBody.appendChild(row);
