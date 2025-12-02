@@ -83,12 +83,12 @@
 
                         <label>
                             Severity
-                            <select name="severity">
-                                <option value="">All</option>
+                            <select name="severity" multiple size="{{ [severities|length, 4]|min }}">
                                 {% for severity in severities %}
-                                <option value="{{ severity }}" {% if severity_filter == severity %}selected{% endif %}>{{ severity }}</option>
+                                <option value="{{ severity }}" {% if severity in severity_filter %}selected{% endif %}>{{ severity }}</option>
                                 {% endfor %}
                             </select>
+                            <div class="helper-text">Hold Ctrl (or ⌘ on Mac) to select multiple severities.</div>
                         </label>
 
                         <button type="submit">Apply</button>
