@@ -22,6 +22,59 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    ```
    The server listens on `http://0.0.0.0:5080/`.
 
+### Run as a system service (systemd)
+1. **Create a dedicated user** (optional but recommended)
+   ```bash
+   sudo useradd --system --shell /usr/sbin/nologin --home /opt/incident-free-days incident
+   sudo mkdir -p /opt/incident-free-days
+   sudo chown -R incident:incident /opt/incident-free-days
+   ```
+
+2. **Copy the app to the service directory**
+   ```bash
+   sudo cp -r /workspace/incident-free-days /opt/incident-free-days/app
+   sudo chown -R incident:incident /opt/incident-free-days/app
+   ```
+
+3. **Create the virtual environment and install dependencies**
+   ```bash
+   cd /opt/incident-free-days/app
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install flask
+   deactivate
+   ```
+
+4. **Create the systemd unit file**
+   ```bash
+   sudo tee /etc/systemd/system/incident-free-days.service > /dev/null <<'EOF'
+   [Unit]
+   Description=Incident Free Days Flask app
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=incident
+   WorkingDirectory=/opt/incident-free-days/app
+   ExecStart=/opt/incident-free-days/app/.venv/bin/python app.py
+   Restart=on-failure
+   Environment=FLASK_ENV=production
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+   ```
+
+5. **Start and enable the service**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl start incident-free-days.service
+   sudo systemctl status incident-free-days.service
+   sudo systemctl enable incident-free-days.service
+   ```
+
+   The app will now start on boot and can be managed via `systemctl`.
+
 3. **Report an incident**
    - Open the app in a browser and switch to the **Report Incident** tab.
    - Provide an incident number, date, severity, and impacted pillar, then submit.
