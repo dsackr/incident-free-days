@@ -86,18 +86,100 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const exportButton = document.getElementById("export-calendar");
     const exportTarget = document.getElementById("calendar-export-target");
+    const severityDropdown = document.getElementById("severity-dropdown");
+    const severityToggle = document.getElementById("severity-dropdown-toggle");
+    const severityMenu = document.getElementById("severity-dropdown-menu");
+    const severitySelectionLabel = document.getElementById("severity-selection-label");
+
+    const updateSeverityLabel = () => {
+        if (!severityDropdown || !severitySelectionLabel) return;
+        const checked = severityDropdown.querySelectorAll("input[name='severity']:checked");
+        if (checked.length === 0) {
+            severitySelectionLabel.textContent = "All";
+            return;
+        }
+
+        const values = Array.from(checked)
+            .map((input) => input.value)
+            .filter(Boolean);
+        severitySelectionLabel.textContent = values.join(", ") || "All";
+    };
+
+    if (severityToggle && severityDropdown) {
+        severityToggle.addEventListener("click", (evt) => {
+            evt.preventDefault();
+            const isOpen = severityDropdown.classList.toggle("open");
+            severityToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+
+        document.addEventListener("click", (evt) => {
+            if (!severityDropdown.contains(evt.target)) {
+                severityDropdown.classList.remove("open");
+                severityToggle.setAttribute("aria-expanded", "false");
+            }
+        });
+
+        severityMenu?.addEventListener("change", (evt) => {
+            if (evt.target && evt.target.matches("input[name='severity']")) {
+                updateSeverityLabel();
+            }
+        });
+
+        updateSeverityLabel();
+    }
+
+    const buildStyleString = (computed) =>
+        Array.from(computed)
+            .map((prop) => `${prop}:${computed.getPropertyValue(prop)};`)
+            .join("");
+
+    const cloneNodeWithInlineStyles = (node) => {
+        const clone = node.cloneNode(false);
+
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const computed = window.getComputedStyle(node);
+            clone.setAttribute("style", buildStyleString(computed));
+        }
+
+        node.childNodes.forEach((child) => {
+            clone.appendChild(cloneNodeWithInlineStyles(child));
+        });
+
+        return clone;
+    };
 
     const exportCalendar = async () => {
-        if (!exportButton || !exportTarget || typeof html2canvas !== "function") return;
+        if (!exportButton || !exportTarget) return;
+
+        let svgUrl = null;
 
         exportButton.disabled = true;
         exportButton.textContent = "Exporting...";
 
         try {
-            const snapshot = await html2canvas(exportTarget, {
-                scale: 2,
-                backgroundColor: "#ffffff",
-                useCORS: true,
+            const cloned = cloneNodeWithInlineStyles(exportTarget);
+            const width = exportTarget.offsetWidth;
+            const height = exportTarget.offsetHeight;
+            const serializer = new XMLSerializer();
+
+            const serialized = serializer.serializeToString(cloned);
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+                    <foreignObject width="100%" height="100%">
+                        <div xmlns="http://www.w3.org/1999/xhtml">${serialized}</div>
+                    </foreignObject>
+                </svg>
+            `;
+
+            const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+            svgUrl = URL.createObjectURL(svgBlob);
+
+            const image = new Image();
+
+            await new Promise((resolve, reject) => {
+                image.onload = () => resolve();
+                image.onerror = () => reject(new Error("Could not load the exported SVG"));
+                image.src = svgUrl;
             });
 
             const canvas = document.createElement("canvas");
@@ -105,16 +187,17 @@ document.addEventListener("DOMContentLoaded", function () {
             canvas.height = 1200;
 
             const ctx = canvas.getContext("2d");
-            if (!ctx) return;
+            if (!ctx) throw new Error("Canvas context unavailable");
+
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const ratio = Math.min(canvas.width / snapshot.width, canvas.height / snapshot.height);
-            const drawWidth = snapshot.width * ratio;
-            const drawHeight = snapshot.height * ratio;
+            const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
+            const drawWidth = image.width * ratio;
+            const drawHeight = image.height * ratio;
             const dx = (canvas.width - drawWidth) / 2;
             const dy = (canvas.height - drawHeight) / 2;
-            ctx.drawImage(snapshot, dx, dy, drawWidth, drawHeight);
+            ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
 
             const viewMode = exportButton.dataset.viewMode || "yearly";
             const year = exportButton.dataset.year || "calendar";
@@ -130,7 +213,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 link.click();
                 URL.revokeObjectURL(link.href);
             });
+        } catch (err) {
+            console.error("Calendar export failed", err);
+            alert("Sorry, the calendar could not be exported. Please try again.");
         } finally {
+            if (svgUrl) {
+                URL.revokeObjectURL(svgUrl);
+            }
             exportButton.disabled = false;
             exportButton.textContent = "Export as Image";
         }
