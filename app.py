@@ -749,12 +749,26 @@ def upload_csv():
     existing_numbers = (
         set()
         if replace_mode
-        else {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
+        else {
+            (
+                inc.get("inc_number"),
+                (inc.get("product") or "").strip(),
+            )
+            for inc in incidents
+            if inc.get("inc_number")
+        }
     )
     other_existing_numbers = (
         set()
         if replace_mode
-        else {evt.get("inc_number") for evt in other_events if evt.get("inc_number")}
+        else {
+            (
+                evt.get("inc_number"),
+                (evt.get("product") or "").strip(),
+            )
+            for evt in other_events
+            if evt.get("inc_number")
+        }
     )
 
     last_year = None
@@ -772,37 +786,41 @@ def upload_csv():
         if not inc_number or reported_dt is None:
             continue
 
-        if event_type == "Operational Incident" and inc_number in existing_numbers:
-            continue
-        if event_type != "Operational Incident" and inc_number in other_existing_numbers:
-            continue
-
         last_year = reported_dt.year
-        product = product_raw.split(",")[0].strip() if product_raw else ""
-        pillar = resolve_pillar(product, mapping=mapping)
+
+        product_values = [p.strip() for p in product_raw.split(",") if p.strip()] or [""]
 
         try:
             duration_seconds = int(raw_duration) if raw_duration else 0
         except ValueError:
             duration_seconds = 0
 
-        payload = {
-            "inc_number": inc_number,
-            "reported_at": reported_dt.isoformat(),
-            "closed_at": closed_dt.isoformat() if closed_dt else "",
-            "duration_seconds": duration_seconds,
-            "severity": severity,
-            "pillar": pillar,
-            "product": product,
-            "event_type": event_type,
-        }
+        for product in product_values:
+            lookup_key = (inc_number, product)
+            if event_type == "Operational Incident" and lookup_key in existing_numbers:
+                continue
+            if event_type != "Operational Incident" and lookup_key in other_existing_numbers:
+                continue
 
-        if event_type == "Operational Incident":
-            incidents.append(payload)
-            existing_numbers.add(inc_number)
-        else:
-            other_events.append(payload)
-            other_existing_numbers.add(inc_number)
+            pillar = resolve_pillar(product, mapping=mapping)
+
+            payload = {
+                "inc_number": inc_number,
+                "reported_at": reported_dt.isoformat(),
+                "closed_at": closed_dt.isoformat() if closed_dt else "",
+                "duration_seconds": duration_seconds,
+                "severity": severity,
+                "pillar": pillar,
+                "product": product,
+                "event_type": event_type,
+            }
+
+            if event_type == "Operational Incident":
+                incidents.append(payload)
+                existing_numbers.add(lookup_key)
+            else:
+                other_events.append(payload)
+                other_existing_numbers.add(lookup_key)
 
     save_events(DATA_FILE, incidents)
     save_events(OTHER_EVENTS_FILE, other_events)
