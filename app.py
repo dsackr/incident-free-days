@@ -87,6 +87,20 @@ def parse_date(raw_value):
     return None
 
 
+def normalize_severity(value):
+    """Normalize severity labels for consistent comparisons."""
+    if value is None:
+        return ""
+
+    cleaned = "".join(ch for ch in str(value).lower() if ch.isalnum())
+    return cleaned
+
+
+def is_sev6(value):
+    normalized = normalize_severity(value)
+    return normalized.startswith("sev6") or normalized in {"6", "06"}
+
+
 def build_calendar(year, incidents):
     """Return data structure describing all 12 months with color info per day."""
     # map YYYY-MM-DD -> list of incidents
@@ -119,7 +133,12 @@ def build_calendar(year, incidents):
                 iso = d.isoformat()
 
                 if iso in incidents_by_date:
-                    css_class = "day-incident"   # red
+                    incidents_for_day = incidents_by_date[iso]
+                    sev6_only = all(
+                        is_sev6(inc.get("severity")) for inc in incidents_for_day
+                    )
+
+                    css_class = "day-sev6" if sev6_only else "day-incident"
                 elif d < today:
                     css_class = "day-ok"         # green
                 else:
@@ -235,9 +254,7 @@ def index():
         if severity_param_supplied:
             severity_filter = []
         else:
-            severity_filter = [
-                sev for sev in severities if sev and sev.lower() != "sev6"
-            ]
+            severity_filter = [sev for sev in severities if sev and not is_sev6(sev)]
 
     if product_filter:
         resolved_pillar = product_pillar_map.get(product_filter) or resolve_pillar(
@@ -267,7 +284,11 @@ def index():
             continue
         if product_filter and inc.get("product") != product_filter:
             continue
-        if severity_filter and inc.get("severity") not in severity_filter:
+        if severity_filter and not any(
+            normalize_severity(inc.get("severity"))
+            == normalize_severity(selected)
+            for selected in severity_filter
+        ):
             continue
 
         try:
@@ -284,7 +305,8 @@ def index():
                 continue
 
         incidents_filtered.append(inc)
-        incident_dates.add(inc_date)
+        if not is_sev6(inc.get("severity")):
+            incident_dates.add(inc_date)
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
