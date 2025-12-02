@@ -10,32 +10,30 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "incidents.json")
+OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 DEFAULT_YEAR = 2025
 
 
-def load_incidents():
-    if not os.path.exists(DATA_FILE):
+def load_events(path):
+    if not os.path.exists(path):
         return []
-    with open(DATA_FILE, "r") as f:
+
+    with open(path, "r") as f:
         try:
             data = json.load(f)
         except json.JSONDecodeError:
             return []
 
-    # Ensure the data is a list of dictionaries before continuing. If the file
-    # was corrupted or manually edited into an unexpected shape, fail closed
-    # so the UI remains usable instead of raising 500 errors when iterating
-    # over the incidents.
     if not isinstance(data, list):
         return []
 
     return [entry for entry in data if isinstance(entry, dict)]
 
 
-def save_incidents(incidents):
-    with open(DATA_FILE, "w") as f:
-        json.dump(incidents, f, indent=2)
+def save_events(path, events):
+    with open(path, "w") as f:
+        json.dump(events, f, indent=2)
 
 
 def load_product_key():
@@ -139,32 +137,32 @@ def is_sev6(value):
     return str(value) == "Other (Sev 6)"
 
 
-def compute_incident_dates(incident, duration_enabled=False):
-    """Return a list of dates covered by an incident.
+def compute_event_dates(event, duration_enabled=False):
+    """Return a list of dates covered by an event using reported/closed times."""
 
-    When duration is enabled, dates include the start date and any following
-    dates reached by the provided duration. Without duration, only the start
-    date is returned.
-    """
+    reported_at = parse_datetime(event.get("reported_at"))
+    closed_at = parse_datetime(event.get("closed_at"))
 
-    try:
-        start_date = datetime.strptime(incident.get("date", ""), "%Y-%m-%d").date()
-    except (TypeError, ValueError):
-        return []
+    if reported_at is None:
+        try:
+            fallback_date = datetime.strptime(event.get("date", ""), "%Y-%m-%d").date()
+            reported_at = datetime.combine(fallback_date, time.min)
+        except (TypeError, ValueError):
+            return []
 
-    start_time_value = parse_time_component(incident.get("start_time"))
-    start_dt = datetime.combine(start_date, start_time_value or time.min)
+    if closed_at is None:
+        try:
+            duration_seconds = int(event.get("duration_seconds", 0) or 0)
+        except (TypeError, ValueError):
+            duration_seconds = 0
 
-    try:
-        duration_minutes = int(incident.get("duration_minutes", 0) or 0)
-    except (TypeError, ValueError):
-        duration_minutes = 0
+        closed_at = reported_at + timedelta(seconds=max(duration_seconds, 0))
 
-    if not duration_enabled or duration_minutes <= 0:
+    start_date = reported_at.date()
+    end_date = max(closed_at.date(), start_date)
+
+    if not duration_enabled:
         return [start_date]
-
-    end_dt = start_dt + timedelta(minutes=max(duration_minutes, 0))
-    end_date = max(end_dt.date(), start_date)
 
     days = []
     current = start_date
@@ -175,8 +173,9 @@ def compute_incident_dates(incident, duration_enabled=False):
     return days
 
 
-def build_calendar(year, incidents_by_date):
+def build_calendar(year, entries_by_date, classify_fn):
     """Return data structure describing all 12 months with color info per day."""
+
     today = date.today()
     cal = calendar.Calendar(firstweekday=6)  # Sunday = 6
 
@@ -193,18 +192,7 @@ def build_calendar(year, incidents_by_date):
                     continue
 
                 iso = d.isoformat()
-
-                if iso in incidents_by_date:
-                    incidents_for_day = incidents_by_date[iso]
-                    sev6_only = all(
-                        is_sev6(inc.get("severity")) for inc in incidents_for_day
-                    )
-
-                    css_class = "day-sev6" if sev6_only else "day-incident"
-                elif d < today:
-                    css_class = "day-ok"         # green
-                else:
-                    css_class = "day-none"       # grey
+                css_class = classify_fn(d, entries_by_date.get(iso, []), today)
 
                 week_cells.append(
                     {
@@ -247,10 +235,12 @@ def index():
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
     severity_params = [value for value in request.args.getlist("severity") if value]
+    event_type_params = [value for value in request.args.getlist("event_type") if value]
     severity_param_supplied = "severity" in request.args
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
+    active_tab = request.args.get("tab", "incidents")
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -265,16 +255,27 @@ def index():
     if view_mode not in {"yearly", "monthly"}:
         view_mode = "yearly"
 
-    incidents = load_incidents()
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+    other_events = [
+        event
+        for event in load_events(OTHER_EVENTS_FILE)
+        if (event.get("event_type") or "") != "Operational Incident"
+    ]
 
     key_mapping = load_product_key()
     key_present = bool(key_mapping)
 
+    all_events = incidents + other_events
+
     # Build product ↔ pillar relationships
     product_pillar_map = {k: v for k, v in key_mapping.items() if k and v}
-    for inc in incidents:
-        product = (inc.get("product") or "").strip()
-        pillar = (inc.get("pillar") or "").strip()
+    for event in all_events:
+        product = (event.get("product") or "").strip()
+        pillar = (event.get("pillar") or "").strip()
 
         if not product:
             continue
@@ -301,6 +302,13 @@ def index():
     pillars = sorted({value for value in product_pillar_map.values() if value})
     products = products_by_pillar["__all__"]
     severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
+    event_types = sorted(
+        {
+            event.get("event_type")
+            for event in all_events
+            if event.get("event_type")
+        }
+    )
 
     if severity_params:
         severity_filter = severity_params
@@ -309,6 +317,11 @@ def index():
             severity_filter = []
         else:
             severity_filter = [sev for sev in severities if sev and not is_sev6(sev)]
+
+    if event_type_params:
+        event_type_filter = event_type_params
+    else:
+        event_type_filter = []
 
     if product_filter:
         resolved_pillar = product_pillar_map.get(product_filter) or resolve_pillar(
@@ -331,44 +344,59 @@ def index():
     else:
         month_selection = None
 
-    incidents_filtered = []
-    incidents_by_date = {}
-    incident_dates = set()
-    for inc in incidents:
-        if pillar_filter and inc.get("pillar") != pillar_filter:
-            continue
-        if product_filter and inc.get("product") != product_filter:
-            continue
-        if severity_filter and not any(
-            inc.get("severity") == selected for selected in severity_filter
-        ):
-            continue
+    def filter_and_group(events):
+        filtered = []
+        grouped = {}
+        dates_with_non_sev6 = set()
 
-        covered_dates = compute_incident_dates(inc, duration_enabled)
-        if not covered_dates:
-            continue
+        for event in events:
+            if pillar_filter and event.get("pillar") != pillar_filter:
+                continue
+            if product_filter and event.get("product") != product_filter:
+                continue
+            if event_type_filter and event.get("event_type") not in event_type_filter:
+                continue
 
-        if multi_day_only and len(set(covered_dates)) < 2:
-            continue
+            if event.get("event_type") == "Operational Incident":
+                if severity_filter and not any(
+                    event.get("severity") == selected for selected in severity_filter
+                ):
+                    continue
 
-        in_month_view = view_mode == "monthly" and month_selection
-        if in_month_view:
-            covered_dates = [
-                d for d in covered_dates if d.year == year and d.month == month_selection
-            ]
-        else:
-            covered_dates = [d for d in covered_dates if d.year == year]
+            covered_dates = compute_event_dates(event, duration_enabled)
+            if not covered_dates:
+                continue
 
-        if not covered_dates:
-            continue
+            if multi_day_only and len(set(covered_dates)) < 2:
+                continue
 
-        incidents_filtered.append(inc)
+            in_month_view = view_mode == "monthly" and month_selection
+            if in_month_view:
+                covered_dates = [
+                    d
+                    for d in covered_dates
+                    if d.year == year and d.month == month_selection
+                ]
+            else:
+                covered_dates = [d for d in covered_dates if d.year == year]
 
-        for d in covered_dates:
-            iso = d.isoformat()
-            incidents_by_date.setdefault(iso, []).append(inc)
-            if not is_sev6(inc.get("severity")):
-                incident_dates.add(d)
+            if not covered_dates:
+                continue
+
+            filtered.append(event)
+
+            for d in covered_dates:
+                iso = d.isoformat()
+                grouped.setdefault(iso, []).append(event)
+                if event.get("event_type") == "Operational Incident" and not is_sev6(
+                    event.get("severity")
+                ):
+                    dates_with_non_sev6.add(d)
+
+        return filtered, grouped, dates_with_non_sev6
+
+    incidents_filtered, incidents_by_date, incident_dates = filter_and_group(incidents)
+    other_filtered, other_by_date, _ = filter_and_group(other_events)
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
@@ -383,14 +411,35 @@ def index():
 
     incident_free_days = max(days_in_range - len(days_with_incidents), 0)
 
-    months = build_calendar(year, incidents_by_date)
+    def classify_operational(day, day_events, today):
+        if day_events:
+            sev6_only = all(is_sev6(evt.get("severity")) for evt in day_events)
+            return "day-sev6" if sev6_only else "day-incident"
+        return "day-ok" if day < today else "day-none"
+
+    def classify_other(day, day_events, _today):
+        if not day_events:
+            return "day-none"
+
+        types = {evt.get("event_type") for evt in day_events}
+        if "War Room" in types:
+            return "day-war-room"
+        if "Deployment Event" in types:
+            return "day-deployment"
+        if "Operational Event" in types:
+            return "day-operational-event"
+        return "day-other-event"
+
+    incident_months = build_calendar(year, incidents_by_date, classify_operational)
+    other_months = build_calendar(year, other_by_date, classify_other)
 
     if view_mode == "monthly" and month_selection:
-        months = [months[month_selection - 1]]
+        incident_months = [incident_months[month_selection - 1]]
+        other_months = [other_months[month_selection - 1]]
 
     active_filters = []
     def build_remove_link(kind, value=None):
-        params = {"view": view_mode, "year": year}
+        params = {"view": view_mode, "year": year, "tab": active_tab}
         if month_selection:
             params["month"] = month_selection
         if duration_enabled:
@@ -415,6 +464,13 @@ def index():
             elif severity_param_supplied:
                 params["severity"] = [""]
 
+        if kind == "event_type":
+            remaining_types = [etype for etype in event_type_filter if etype != value]
+            if remaining_types:
+                params["event_type"] = remaining_types
+        elif event_type_filter:
+            params["event_type"] = event_type_filter
+
         return url_for("index", **params)
 
     if pillar_filter:
@@ -434,9 +490,18 @@ def index():
                     "remove_link": build_remove_link("severity", severity),
                 }
             )
+    if event_type_filter:
+        for event_type in event_type_filter:
+            active_filters.append(
+                {
+                    "label": "Event Type",
+                    "value": event_type,
+                    "remove_link": build_remove_link("event_type", event_type),
+                }
+            )
 
     def build_link(target_view, target_year, target_month=None):
-        params = {"view": target_view, "year": target_year}
+        params = {"view": target_view, "year": target_year, "tab": active_tab}
         if target_month:
             params["month"] = target_month
         if duration_enabled:
@@ -451,6 +516,8 @@ def index():
             params["severity"] = severity_filter
         elif severity_param_supplied:
             params["severity"] = [""]
+        if event_type_filter:
+            params["event_type"] = event_type_filter
         return url_for("index", **params)
 
     if view_mode == "monthly" and month_selection:
@@ -478,28 +545,40 @@ def index():
     yearly_view_link = build_link("yearly", year)
     monthly_view_link = build_link("monthly", year, target_month_for_toggle)
 
-    # sort incidents newest-first for display
+    # sort newest-first for display
     incidents_sorted = sorted(
-        incidents_filtered, key=lambda x: x.get("date") or "", reverse=True
+        incidents_filtered,
+        key=lambda x: (x.get("reported_at") or x.get("date") or ""),
+        reverse=True,
+    )
+    other_sorted = sorted(
+        other_filtered,
+        key=lambda x: (x.get("reported_at") or x.get("date") or ""),
+        reverse=True,
     )
 
     return render_template(
         "index.html",
         year=year,
-        months=months,
+        incident_months=incident_months,
+        other_months=other_months,
         incidents=incidents_sorted,
+        other_events=other_sorted,
         view_mode=view_mode,
         month_selection=month_selection,
         pillars=pillars,
         products=products,
         severities=severities,
+        event_types=event_types,
         products_by_pillar=products_by_pillar,
         product_pillar_map=product_pillar_map,
         pillar_filter=pillar_filter,
         product_filter=product_filter,
         severity_filter=severity_filter,
+        event_type_filter=event_type_filter,
         calendar=calendar,
         incidents_by_date=incidents_by_date,
+        other_by_date=other_by_date,
         active_filters=active_filters,
         incident_count=unique_incident_count,
         incident_free_days=incident_free_days,
@@ -514,6 +593,7 @@ def index():
         key_missing=key_missing,
         key_uploaded=key_uploaded,
         key_error=key_error,
+        active_tab=active_tab,
     )
 
 
@@ -522,9 +602,12 @@ def add_incident():
     inc_number = request.form.get("inc_number", "").strip()
     raw_date = request.form.get("date", "").strip()
     start_time_raw = request.form.get("start_time", "").strip()
-    duration_raw = request.form.get("duration_minutes", "").strip()
+    closed_date_raw = request.form.get("closed_date", "").strip()
+    closed_time_raw = request.form.get("closed_time", "").strip()
+    duration_raw = request.form.get("duration_seconds", "").strip()
     severity = request.form.get("severity", "").strip()
     product = request.form.get("product", "").strip()
+    event_type = request.form.get("event_type", "Operational Incident").strip() or "Operational Incident"
 
     # basic validation
     if not inc_number or not raw_date:
@@ -535,35 +618,50 @@ def add_incident():
     if parsed_date is None:
         return redirect(url_for("index"))
 
-    incidents = load_incidents()
+    target_file = DATA_FILE if event_type == "Operational Incident" else OTHER_EVENTS_FILE
+    events = load_events(target_file)
 
-    if incident_exists(incidents, inc_number):
+    if incident_exists(events, inc_number):
         return redirect(url_for("index", year=parsed_date.year))
 
     pillar = resolve_pillar(product)
 
     start_time_value = parse_time_component(start_time_raw)
+    reported_dt = None
+    if parsed_date:
+        reported_dt = datetime.combine(parsed_date, start_time_value or time.min)
+
+    closed_dt = None
+    if closed_date_raw:
+        closed_date = parse_date(closed_date_raw)
+        closed_time_value = parse_time_component(closed_time_raw)
+        if closed_date:
+            closed_dt = datetime.combine(closed_date, closed_time_value or time.min)
 
     try:
-        duration_minutes = int(duration_raw) if duration_raw else 0
+        duration_seconds = int(duration_raw) if duration_raw else 0
     except ValueError:
-        duration_minutes = 0
+        duration_seconds = 0
 
-    incidents.append(
+    if reported_dt and closed_dt and closed_dt < reported_dt:
+        closed_dt = reported_dt
+
+    events.append(
         {
             "inc_number": inc_number,
-            "date": parsed_date.isoformat(),
-            "start_time": start_time_value.strftime("%H:%M") if start_time_value else "",
-            "duration_minutes": duration_minutes,
+            "reported_at": reported_dt.isoformat() if reported_dt else "",
+            "closed_at": closed_dt.isoformat() if closed_dt else "",
+            "duration_seconds": duration_seconds,
             "severity": severity,
             "pillar": pillar,
             "product": product,
+            "event_type": event_type,
         }
     )
 
-    save_incidents(incidents)
+    save_events(target_file, events)
 
-    return redirect(url_for("index", year=parsed_date.year))
+    return redirect(url_for("index", year=parsed_date.year, tab="incidents" if event_type == "Operational Incident" else "others"))
 
 
 @app.route("/upload", methods=["POST"])
@@ -585,9 +683,17 @@ def upload_csv():
 
     reader = csv.DictReader(StringIO(content))
     replace_mode = import_mode == "replace"
-    incidents = [] if replace_mode else load_incidents()
+    incidents = [] if replace_mode else load_events(DATA_FILE)
+    other_events = [] if replace_mode else load_events(OTHER_EVENTS_FILE)
     existing_numbers = (
-        set() if replace_mode else {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
+        set()
+        if replace_mode
+        else {inc.get("inc_number") for inc in incidents if inc.get("inc_number")}
+    )
+    other_existing_numbers = (
+        set()
+        if replace_mode
+        else {evt.get("inc_number") for evt in other_events if evt.get("inc_number")}
     )
 
     last_year = None
@@ -596,13 +702,18 @@ def upload_csv():
         severity = (row.get("Severity") or "").strip()
         product_raw = (row.get("Product") or "").strip()
         raw_reported_at = (row.get("Reported at") or "").strip()
+        raw_closed_at = (row.get("Closed at") or "").strip()
         raw_duration = (row.get("Client Impact Duration") or "").strip()
+        event_type = (row.get("Incident Type") or "Operational Incident").strip()
 
         reported_dt = parse_datetime(raw_reported_at)
+        closed_dt = parse_datetime(raw_closed_at)
         if not inc_number or reported_dt is None:
             continue
 
-        if inc_number in existing_numbers:
+        if event_type == "Operational Incident" and inc_number in existing_numbers:
+            continue
+        if event_type != "Operational Incident" and inc_number in other_existing_numbers:
             continue
 
         last_year = reported_dt.year
@@ -610,24 +721,30 @@ def upload_csv():
         pillar = resolve_pillar(product, mapping=mapping)
 
         try:
-            duration_minutes = int(raw_duration) if raw_duration else 0
+            duration_seconds = int(raw_duration) if raw_duration else 0
         except ValueError:
-            duration_minutes = 0
+            duration_seconds = 0
 
-        incidents.append(
-            {
-                "inc_number": inc_number,
-                "date": reported_dt.date().isoformat(),
-                "start_time": reported_dt.strftime("%H:%M"),
-                "duration_minutes": duration_minutes,
-                "severity": severity,
-                "pillar": pillar,
-                "product": product,
-            }
-        )
-        existing_numbers.add(inc_number)
+        payload = {
+            "inc_number": inc_number,
+            "reported_at": reported_dt.isoformat(),
+            "closed_at": closed_dt.isoformat() if closed_dt else "",
+            "duration_seconds": duration_seconds,
+            "severity": severity,
+            "pillar": pillar,
+            "product": product,
+            "event_type": event_type,
+        }
 
-    save_incidents(incidents)
+        if event_type == "Operational Incident":
+            incidents.append(payload)
+            existing_numbers.add(inc_number)
+        else:
+            other_events.append(payload)
+            other_existing_numbers.add(inc_number)
+
+    save_events(DATA_FILE, incidents)
+    save_events(OTHER_EVENTS_FILE, other_events)
 
     redirect_year = last_year if last_year is not None else None
     if redirect_year:
@@ -660,13 +777,19 @@ def upload_key_file():
         json.dump(normalized, f, indent=2)
 
     # Recalculate pillar assignments for all incidents using the new key
-    incidents = load_incidents()
-    if incidents:
-        for incident in incidents:
+    incidents = load_events(DATA_FILE)
+    other_events = load_events(OTHER_EVENTS_FILE)
+
+    for collection, path in ((incidents, DATA_FILE), (other_events, OTHER_EVENTS_FILE)):
+        if not collection:
+            continue
+
+        for incident in collection:
             incident["pillar"] = resolve_pillar(
                 incident.get("product", ""), incident.get("pillar", ""), mapping=normalized
             )
-        save_incidents(incidents)
+
+        save_events(path, collection)
 
     return redirect(url_for("index", key_uploaded=1))
 
