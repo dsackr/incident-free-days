@@ -96,8 +96,29 @@ h1 {
     background: #2e7d32;
 }
 
+.legend-red-light {
+    background: #f2a7a7;
+}
+
+.legend-red-medium {
+    background: #e57373;
+}
+
 .legend-red {
-    background: #c62828;
+    background: #b71c1c;
+}
+
+.legend-sev1-marker {
+    position: relative;
+    background: #f2a7a7;
+}
+
+.legend-sev1-marker::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: #000000;
 }
 
 .legend-yellow {
@@ -456,8 +477,18 @@ h1 {
     color: #ffffff;
 }
 
-.day-incident {
-    background: #c62828; /* red */
+.day-incident-light {
+    background: #f6bcbc; /* light red for 1 incident */
+    color: #3f1d1d;
+}
+
+.day-incident-medium {
+    background: #e57373; /* medium red for 2-3 incidents */
+    color: #ffffff;
+}
+
+.day-incident-heavy {
+    background: #b71c1c; /* dark red for 4+ incidents */
     color: #ffffff;
 }
 
@@ -489,10 +520,23 @@ h1 {
 .day-cell {
     cursor: pointer;
     transition: transform 0.05s ease;
+    position: relative;
 }
 
 .day-cell:hover {
     transform: scale(1.02);
+}
+
+.day-sev1-marker::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #000000;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .empty {
