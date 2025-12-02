@@ -148,26 +148,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return clone;
     };
 
-    const buildStyleString = (computed) =>
-        Array.from(computed)
-            .map((prop) => `${prop}:${computed.getPropertyValue(prop)};`)
-            .join("");
-
-    const cloneNodeWithInlineStyles = (node) => {
-        const clone = node.cloneNode(false);
-
-        if (node.nodeType === Node.ELEMENT_NODE) {
-            const computed = window.getComputedStyle(node);
-            clone.setAttribute("style", buildStyleString(computed));
-        }
-
-        node.childNodes.forEach((child) => {
-            clone.appendChild(cloneNodeWithInlineStyles(child));
-        });
-
-        return clone;
-    };
-
     const exportCalendar = async () => {
         if (!exportButton || !exportTarget) return;
 
