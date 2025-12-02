@@ -148,22 +148,18 @@ document.addEventListener("DOMContentLoaded", function () {
         return clone;
     };
 
-    const exportCalendar = async () => {
-        if (!exportButton || !exportTarget) return;
+    const renderWithInlineSvg = async () => {
+        if (!exportTarget) return null;
 
         let svgUrl = null;
 
-        exportButton.disabled = true;
-        exportButton.textContent = "Exporting...";
+        const cloned = cloneNodeWithInlineStyles(exportTarget);
+        const width = exportTarget.offsetWidth;
+        const height = exportTarget.offsetHeight;
+        const serializer = new XMLSerializer();
 
-        try {
-            const cloned = cloneNodeWithInlineStyles(exportTarget);
-            const width = exportTarget.offsetWidth;
-            const height = exportTarget.offsetHeight;
-            const serializer = new XMLSerializer();
-
-            const serialized = serializer.serializeToString(cloned);
-            const svg = `
+        const serialized = serializer.serializeToString(cloned);
+        const svg = `
                 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
                     <foreignObject width="100%" height="100%">
                         <div xmlns="http://www.w3.org/1999/xhtml">${serialized}</div>
@@ -171,16 +167,75 @@ document.addEventListener("DOMContentLoaded", function () {
                 </svg>
             `;
 
-            const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-            svgUrl = URL.createObjectURL(svgBlob);
+        const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+        svgUrl = URL.createObjectURL(svgBlob);
 
-            const image = new Image();
+        const image = new Image();
 
-            await new Promise((resolve, reject) => {
-                image.onload = () => resolve();
-                image.onerror = () => reject(new Error("Could not load the exported SVG"));
-                image.src = svgUrl;
-            });
+        await new Promise((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Could not load the exported SVG"));
+            image.src = svgUrl;
+        });
+
+        return {
+            image,
+            cleanup: () => {
+                if (svgUrl) {
+                    URL.revokeObjectURL(svgUrl);
+                }
+            },
+        };
+    };
+
+    const renderWithHtml2Canvas = async () => {
+        if (typeof html2canvas !== "function" || !exportTarget) return null;
+
+        const snapshot = await html2canvas(exportTarget, {
+            scale: 2,
+            backgroundColor: "#ffffff",
+            useCORS: true,
+        });
+
+        return { canvas: snapshot };
+    };
+
+    const exportCalendar = async () => {
+        if (!exportButton || !exportTarget) return;
+
+        let cleanup = null;
+
+        exportButton.disabled = true;
+        exportButton.textContent = "Exporting...";
+
+        try {
+            const html2canvasResult = await renderWithHtml2Canvas();
+            let source = null;
+
+            if (html2canvasResult?.canvas) {
+                source = {
+                    width: html2canvasResult.canvas.width,
+                    height: html2canvasResult.canvas.height,
+                    draw: (ctx, dx, dy, drawWidth, drawHeight) =>
+                        ctx.drawImage(html2canvasResult.canvas, dx, dy, drawWidth, drawHeight),
+                };
+            } else {
+                const svgResult = await renderWithInlineSvg();
+                cleanup = svgResult?.cleanup;
+
+                if (svgResult?.image) {
+                    source = {
+                        width: svgResult.image.width,
+                        height: svgResult.image.height,
+                        draw: (ctx, dx, dy, drawWidth, drawHeight) =>
+                            ctx.drawImage(svgResult.image, dx, dy, drawWidth, drawHeight),
+                    };
+                }
+            }
+
+            if (!source) {
+                throw new Error("Unable to render calendar for export");
+            }
 
             const canvas = document.createElement("canvas");
             canvas.width = 1600;
@@ -192,12 +247,12 @@ document.addEventListener("DOMContentLoaded", function () {
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const ratio = Math.min(canvas.width / image.width, canvas.height / image.height);
-            const drawWidth = image.width * ratio;
-            const drawHeight = image.height * ratio;
+            const ratio = Math.min(canvas.width / source.width, canvas.height / source.height);
+            const drawWidth = source.width * ratio;
+            const drawHeight = source.height * ratio;
             const dx = (canvas.width - drawWidth) / 2;
             const dy = (canvas.height - drawHeight) / 2;
-            ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
+            source.draw(ctx, dx, dy, drawWidth, drawHeight);
 
             const viewMode = exportButton.dataset.viewMode || "yearly";
             const year = exportButton.dataset.year || "calendar";
@@ -217,9 +272,7 @@ document.addEventListener("DOMContentLoaded", function () {
             console.error("Calendar export failed", err);
             alert("Sorry, the calendar could not be exported. Please try again.");
         } finally {
-            if (svgUrl) {
-                URL.revokeObjectURL(svgUrl);
-            }
+            cleanup?.();
             exportButton.disabled = false;
             exportButton.textContent = "Export as Image";
         }
