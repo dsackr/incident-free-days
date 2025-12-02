@@ -351,10 +351,7 @@ def index():
     if severity_params:
         severity_filter = severity_params
     else:
-        if severity_param_supplied:
-            severity_filter = []
-        else:
-            severity_filter = [sev for sev in severities if sev and not is_sev6(sev)]
+        severity_filter = []
 
     if event_type_params:
         event_type_filter = event_type_params
