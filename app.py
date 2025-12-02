@@ -19,9 +19,18 @@ def load_incidents():
         return []
     with open(DATA_FILE, "r") as f:
         try:
-            return json.load(f)
+            data = json.load(f)
         except json.JSONDecodeError:
             return []
+
+    # Ensure the data is a list of dictionaries before continuing. If the file
+    # was corrupted or manually edited into an unexpected shape, fail closed
+    # so the UI remains usable instead of raising 500 errors when iterating
+    # over the incidents.
+    if not isinstance(data, list):
+        return []
+
+    return [entry for entry in data if isinstance(entry, dict)]
 
 
 def save_incidents(incidents):
@@ -85,7 +94,7 @@ def build_calendar(year, incidents):
     for inc in incidents:
         try:
             d = datetime.strptime(inc["date"], "%Y-%m-%d").date()
-        except (KeyError, ValueError):
+        except (KeyError, TypeError, ValueError):
             continue
         if d.year != year:
             continue
@@ -261,7 +270,7 @@ def index():
 
         try:
             inc_date = datetime.strptime(inc.get("date", ""), "%Y-%m-%d").date()
-        except ValueError:
+        except (TypeError, ValueError):
             continue
 
         in_month_view = view_mode == "monthly" and month_selection
@@ -378,7 +387,7 @@ def index():
 
     # sort incidents newest-first for display
     incidents_sorted = sorted(
-        incidents_filtered, key=lambda x: x.get("date", ""), reverse=True
+        incidents_filtered, key=lambda x: x.get("date") or "", reverse=True
     )
 
     return render_template(
