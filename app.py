@@ -307,7 +307,7 @@ def index():
     event_types = sorted(
         {
             event.get("event_type")
-            for event in all_events
+            for event in other_events
             if event.get("event_type")
         }
     )
@@ -346,7 +346,7 @@ def index():
     else:
         month_selection = None
 
-    def filter_and_group(events):
+    def filter_and_group(events, apply_event_type_filter=False, include_severity_filter=False):
         filtered = []
         grouped = {}
         dates_with_non_sev6 = set()
@@ -356,10 +356,10 @@ def index():
                 continue
             if product_filter and event.get("product") != product_filter:
                 continue
-            if event_type_filter and event.get("event_type") not in event_type_filter:
+            if apply_event_type_filter and event_type_filter and event.get("event_type") not in event_type_filter:
                 continue
 
-            if event.get("event_type") == "Operational Incident":
+            if include_severity_filter and event.get("event_type") == "Operational Incident":
                 if severity_filter and not any(
                     event.get("severity") == selected for selected in severity_filter
                 ):
@@ -397,8 +397,12 @@ def index():
 
         return filtered, grouped, dates_with_non_sev6
 
-    incidents_filtered, incidents_by_date, incident_dates = filter_and_group(incidents)
-    other_filtered, other_by_date, _ = filter_and_group(other_events)
+    incidents_filtered, incidents_by_date, incident_dates = filter_and_group(
+        incidents, apply_event_type_filter=False, include_severity_filter=True
+    )
+    other_filtered, other_by_date, _ = filter_and_group(
+        other_events, apply_event_type_filter=True, include_severity_filter=False
+    )
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
@@ -439,9 +443,12 @@ def index():
         incident_months = [incident_months[month_selection - 1]]
         other_months = [other_months[month_selection - 1]]
 
-    active_filters = []
-    def build_remove_link(kind, value=None):
-        params = {"view": view_mode, "year": year, "tab": active_tab}
+    incident_filters = []
+    other_filters = []
+
+    def build_remove_link(kind, value=None, tab=None):
+        target_tab = tab or active_tab
+        params = {"view": view_mode, "year": year, "tab": target_tab}
         if month_selection:
             params["month"] = month_selection
         if duration_enabled:
@@ -454,56 +461,81 @@ def index():
         if kind != "product" and product_filter:
             params["product"] = product_filter
 
-        if kind == "severity":
-            remaining = [sev for sev in severity_filter if sev != value]
-            if remaining:
-                params["severity"] = remaining
-            elif severity_param_supplied:
-                params["severity"] = [""]
-        else:
-            if severity_filter:
-                params["severity"] = severity_filter
-            elif severity_param_supplied:
-                params["severity"] = [""]
+        if target_tab == "incidents":
+            if kind == "severity":
+                remaining = [sev for sev in severity_filter if sev != value]
+                if remaining:
+                    params["severity"] = remaining
+                elif severity_param_supplied:
+                    params["severity"] = [""]
+            else:
+                if severity_filter:
+                    params["severity"] = severity_filter
+                elif severity_param_supplied:
+                    params["severity"] = [""]
 
-        if kind == "event_type":
-            remaining_types = [etype for etype in event_type_filter if etype != value]
-            if remaining_types:
-                params["event_type"] = remaining_types
-        elif event_type_filter:
-            params["event_type"] = event_type_filter
+        if target_tab == "others":
+            if kind == "event_type":
+                remaining_types = [etype for etype in event_type_filter if etype != value]
+                if remaining_types:
+                    params["event_type"] = remaining_types
+            elif event_type_filter:
+                params["event_type"] = event_type_filter
 
         return url_for("index", **params)
 
     if pillar_filter:
-        active_filters.append(
-            {"label": "Pillar", "value": pillar_filter, "remove_link": build_remove_link("pillar")}
+        incident_filters.append(
+            {
+                "label": "Pillar",
+                "value": pillar_filter,
+                "remove_link": build_remove_link("pillar", tab="incidents"),
+            }
+        )
+        other_filters.append(
+            {
+                "label": "Pillar",
+                "value": pillar_filter,
+                "remove_link": build_remove_link("pillar", tab="others"),
+            }
         )
     if product_filter:
-        active_filters.append(
-            {"label": "Product", "value": product_filter, "remove_link": build_remove_link("product")}
+        incident_filters.append(
+            {
+                "label": "Product",
+                "value": product_filter,
+                "remove_link": build_remove_link("product", tab="incidents"),
+            }
+        )
+        other_filters.append(
+            {
+                "label": "Product",
+                "value": product_filter,
+                "remove_link": build_remove_link("product", tab="others"),
+            }
         )
     if severity_filter:
         for severity in severity_filter:
-            active_filters.append(
+            incident_filters.append(
                 {
                     "label": "Severity",
                     "value": severity,
-                    "remove_link": build_remove_link("severity", severity),
+                    "remove_link": build_remove_link("severity", severity, tab="incidents"),
                 }
             )
     if event_type_filter:
         for event_type in event_type_filter:
-            active_filters.append(
+            other_filters.append(
                 {
                     "label": "Event Type",
                     "value": event_type,
-                    "remove_link": build_remove_link("event_type", event_type),
+                    "remove_link": build_remove_link("event_type", event_type, tab="others"),
                 }
             )
 
-    def build_link(target_view, target_year, target_month=None):
-        params = {"view": target_view, "year": target_year, "tab": active_tab}
+    def build_link(target_view, target_year, target_month=None, tab=None):
+        target_tab = tab or active_tab
+        params = {"view": target_view, "year": target_year, "tab": target_tab}
         if target_month:
             params["month"] = target_month
         if duration_enabled:
@@ -514,11 +546,12 @@ def index():
             params["pillar"] = pillar_filter
         if product_filter:
             params["product"] = product_filter
-        if severity_filter:
-            params["severity"] = severity_filter
-        elif severity_param_supplied:
-            params["severity"] = [""]
-        if event_type_filter:
+        if target_tab == "incidents":
+            if severity_filter:
+                params["severity"] = severity_filter
+            elif severity_param_supplied:
+                params["severity"] = [""]
+        if target_tab == "others" and event_type_filter:
             params["event_type"] = event_type_filter
         return url_for("index", **params)
 
@@ -581,7 +614,8 @@ def index():
         calendar=calendar,
         incidents_by_date=incidents_by_date,
         other_by_date=other_by_date,
-        active_filters=active_filters,
+        incident_filters=incident_filters,
+        other_filters=other_filters,
         incident_count=unique_incident_count,
         incident_free_days=incident_free_days,
         prev_link=prev_link,

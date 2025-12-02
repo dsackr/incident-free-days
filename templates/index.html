@@ -92,16 +92,6 @@
                         </label>
 
                         <label>
-                            Event Type
-                            <select name="event_type" multiple size="{{ [event_types|length, 4]|max }}">
-                                {% for event_type in event_types %}
-                                <option value="{{ event_type }}" {% if event_type in event_type_filter %}selected{% endif %}>{{ event_type }}</option>
-                                {% endfor %}
-                            </select>
-                            <span class="helper-text small">Hold Ctrl/Cmd to select multiple.</span>
-                        </label>
-
-                        <label>
                             Severity
                             <div class="dropdown severity-dropdown" id="severity-dropdown">
                                 <button
@@ -163,10 +153,10 @@
                 </form>
 
                 <div class="filter-summary">
-                    {% if active_filters %}
+                    {% if incident_filters %}
                         <span class="filter-summary-label">Current filters:</span>
                         <div class="filter-chip-row">
-                            {% for active_filter in active_filters %}
+                            {% for active_filter in incident_filters %}
                                 <a class="filter-chip removable" href="{{ active_filter.remove_link }}">
                                     <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
                                     <span class="filter-chip-close" aria-hidden="true">×</span>
@@ -292,12 +282,38 @@
 
                         <label>
                             Event Type
-                            <select name="event_type" multiple size="{{ [event_types|length, 4]|max }}">
-                                {% for event_type in event_types %}
-                                <option value="{{ event_type }}" {% if event_type in event_type_filter %}selected{% endif %}>{{ event_type }}</option>
-                                {% endfor %}
-                            </select>
-                            <span class="helper-text small">Hold Ctrl/Cmd to select multiple.</span>
+                            <div class="dropdown" id="event-type-dropdown">
+                                <button
+                                    class="dropdown-toggle"
+                                    type="button"
+                                    id="event-type-dropdown-toggle"
+                                    aria-haspopup="true"
+                                    aria-expanded="false"
+                                >
+                                    <span id="event-type-selection-label">
+                                        {% if event_type_filter %}
+                                            {{ event_type_filter | join(', ') }}
+                                        {% else %}
+                                            All
+                                        {% endif %}
+                                    </span>
+                                    <span aria-hidden="true">▾</span>
+                                </button>
+                                <div class="dropdown-menu" id="event-type-dropdown-menu" role="menu">
+                                    {% for event_type in event_types %}
+                                    <label class="checkbox-option">
+                                        <input
+                                            type="checkbox"
+                                            name="event_type"
+                                            value="{{ event_type }}"
+                                            {% if event_type in event_type_filter %}checked{% endif %}
+                                        />
+                                        {{ event_type }}
+                                    </label>
+                                    {% endfor %}
+                                    <p class="helper-text small">Select one or more event types to display.</p>
+                                </div>
+                            </div>
                         </label>
 
                         <label class="checkbox-inline">
@@ -324,6 +340,23 @@
                         <button type="submit">Apply</button>
                     </div>
                 </form>
+
+                <div class="filter-summary">
+                    {% if other_filters %}
+                        <span class="filter-summary-label">Current filters:</span>
+                        <div class="filter-chip-row">
+                            {% for active_filter in other_filters %}
+                                <a class="filter-chip removable" href="{{ active_filter.remove_link }}">
+                                    <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                                    <span class="filter-chip-close" aria-hidden="true">×</span>
+                                    <span class="sr-only">Remove {{ active_filter.label }} filter</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <span class="filter-summary-label">Current filters: All</span>
+                    {% endif %}
+                </div>
 
                 <div class="months-grid {% if other_months|length == 1 %}single-column{% endif %}">
                     {% for month in other_months %}
