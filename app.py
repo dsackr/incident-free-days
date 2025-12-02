@@ -87,18 +87,8 @@ def parse_date(raw_value):
     return None
 
 
-def normalize_severity(value):
-    """Normalize severity labels for consistent comparisons."""
-    if value is None:
-        return ""
-
-    cleaned = "".join(ch for ch in str(value).lower() if ch.isalnum())
-    return cleaned
-
-
 def is_sev6(value):
-    normalized = normalize_severity(value)
-    return normalized in {"sev6", "6"}
+    return str(value) == "Other (Sev 6)"
 
 
 def build_calendar(year, incidents):
@@ -285,9 +275,7 @@ def index():
         if product_filter and inc.get("product") != product_filter:
             continue
         if severity_filter and not any(
-            normalize_severity(inc.get("severity"))
-            == normalize_severity(selected)
-            for selected in severity_filter
+            inc.get("severity") == selected for selected in severity_filter
         ):
             continue
 
