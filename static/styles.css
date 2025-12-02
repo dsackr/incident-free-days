@@ -238,10 +238,21 @@ h1 {
     color: #2f3b4c;
 }
 
-.incident-count {
+.incident-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
     font-weight: 700;
     color: #1f2a3b;
     margin: 4px 0 12px;
+}
+
+.incident-free {
+    background: #e9f5ec;
+    border: 1px solid #b7dfc5;
+    border-radius: 6px;
+    padding: 8px 12px;
 }
 
 .upload-panel {

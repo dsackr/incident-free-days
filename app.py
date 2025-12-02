@@ -192,7 +192,17 @@ def index():
     products = sorted({inc.get("product") for inc in incidents if inc.get("product")})
     severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
 
+    if view_mode == "monthly":
+        if month_selection is None:
+            today = date.today()
+            month_selection = today.month if today.year == year else 1
+        if not (1 <= month_selection <= 12):
+            month_selection = None
+    else:
+        month_selection = None
+
     incidents_filtered = []
+    incident_dates = set()
     for inc in incidents:
         if pillar_filter and inc.get("pillar") != pillar_filter:
             continue
@@ -200,25 +210,41 @@ def index():
             continue
         if severity_filter and inc.get("severity") != severity_filter:
             continue
+
+        try:
+            inc_date = datetime.strptime(inc.get("date", ""), "%Y-%m-%d").date()
+        except ValueError:
+            continue
+
+        in_month_view = view_mode == "monthly" and month_selection
+        if in_month_view:
+            if not (inc_date.year == year and inc_date.month == month_selection):
+                continue
+        else:
+            if inc_date.year != year:
+                continue
+
         incidents_filtered.append(inc)
+        incident_dates.add(inc_date)
 
     unique_incident_count = len(
         {inc.get("inc_number") for inc in incidents_filtered if inc.get("inc_number")}
     )
 
+    if view_mode == "monthly" and month_selection:
+        days_in_range = calendar.monthrange(year, month_selection)[1]
+        days_with_incidents = {d for d in incident_dates if d.month == month_selection}
+    else:
+        days_in_range = (date(year + 1, 1, 1) - date(year, 1, 1)).days
+        days_with_incidents = incident_dates
+
+    incident_free_days = max(days_in_range - len(days_with_incidents), 0)
+
     months = build_calendar(year, incidents_filtered)
     incidents_by_date = group_incidents_by_date(incidents_filtered)
 
-    if view_mode == "monthly":
-        if month_selection is None:
-            today = date.today()
-            month_selection = today.month if today.year == year else 1
-        if 1 <= month_selection <= 12:
-            months = [months[month_selection - 1]]
-        else:
-            month_selection = None
-    else:
-        month_selection = None
+    if view_mode == "monthly" and month_selection:
+        months = [months[month_selection - 1]]
 
     active_filters = []
     if pillar_filter:
@@ -287,6 +313,7 @@ def index():
         incidents_by_date=incidents_by_date,
         active_filters=active_filters,
         incident_count=unique_incident_count,
+        incident_free_days=incident_free_days,
         prev_link=prev_link,
         next_link=next_link,
         current_period_label=current_period_label,

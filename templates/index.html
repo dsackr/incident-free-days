@@ -108,7 +108,10 @@
                     {% endif %}
                 </div>
 
-                <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
+                <div class="incident-metrics">
+                    <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
+                    <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
+                </div>
 
                 <div class="months-grid {% if months|length == 1 %}single-column{% endif %}">
                     {% for month in months %}
