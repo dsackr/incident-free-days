@@ -97,11 +97,11 @@ h1 {
 }
 
 .legend-red-light {
-    background: #ef9a9a;
+    background: #f2a7a7;
 }
 
 .legend-red-medium {
-    background: #d86262;
+    background: #e57373;
 }
 
 .legend-red {
@@ -110,7 +110,7 @@ h1 {
 
 .legend-sev1-marker {
     position: relative;
-    background: #ef9a9a;
+    background: #f2a7a7;
 }
 
 .legend-sev1-marker::after {
@@ -478,12 +478,12 @@ h1 {
 }
 
 .day-incident-light {
-    background: #ef9a9a; /* light red for 1 incident */
+    background: #f6bcbc; /* light red for 1 incident */
     color: #3f1d1d;
 }
 
 .day-incident-medium {
-    background: #d86262; /* medium red for 2-3 incidents */
+    background: #e57373; /* medium red for 2-3 incidents */
     color: #ffffff;
 }
 
