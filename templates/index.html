@@ -196,13 +196,20 @@
                     <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Product → Product. Pillars are always populated using the uploaded product → pillar key.</p>
                     <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
                         <input type="file" name="file" accept=".csv" required {% if not key_present %}disabled{% endif %} />
+                        <label class="helper-text">
+                            Import mode
+                            <select name="mode" {% if not key_present %}disabled{% endif %}>
+                                <option value="update" selected>Update (default) — add only new incidents, keep existing</option>
+                                <option value="replace">Replace — clear all incidents and rebuild from this CSV</option>
+                            </select>
+                        </label>
                         <button type="submit" {% if not key_present %}disabled{% endif %}>Upload CSV</button>
                     </form>
                 </div>
 
                 <div>
                     <h3>Upload product → pillar key</h3>
-                    <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}.</p>
+                    <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}. Uploading a new key will replace the previous mapping and update all incidents to use the latest pillars.</p>
                     <form method="POST" action="{{ url_for('upload_key_file') }}" enctype="multipart/form-data">
                         <input type="file" name="key_file" accept=".json" required />
                         <button type="submit">Upload Key</button>
@@ -244,33 +251,6 @@
                 </div>
             </form>
 
-            {% if incidents %}
-            <h3>Recorded Incidents</h3>
-            <table class="incidents-table">
-                <thead>
-                    <tr>
-                        <th>INC</th>
-                        <th>Date</th>
-                        <th>Severity</th>
-                        <th>Pillar</th>
-                        <th>Product</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for inc in incidents %}
-                    <tr>
-                        <td>{{ inc.inc_number }}</td>
-                        <td>{{ inc.date }}</td>
-                        <td>{{ inc.severity }}</td>
-                        <td>{{ inc.pillar }}</td>
-                        <td>{{ inc.product }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p>No incidents recorded yet.</p>
-            {% endif %}
         </div>
     </div>
 
