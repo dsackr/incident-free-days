@@ -101,4 +101,4 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 
 ## Exporting the calendar to an image
 - The calendar tab includes an **Export as Image** button that captures the visible calendar into a PNG.
-- The export uses the [`html2canvas` 1.4.1](https://cdnjs.com/libraries/html2canvas) CDN script already referenced in `templates/index.html`; no extra setup is required.
+- The export runs completely in the browser (no external CDN dependency), so it works even in offline environments.
