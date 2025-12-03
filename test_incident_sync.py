@@ -11,8 +11,16 @@ class IncidentSyncTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.incidents_file = os.path.join(self.temp_dir.name, "incidents.json")
         self.other_file = os.path.join(self.temp_dir.name, "others.json")
+        self.sync_config_file = os.path.join(self.temp_dir.name, "sync_config.json")
+
+        self.original_sync_config = app.SYNC_CONFIG_FILE
+        self.original_product_key = app.PRODUCT_KEY_FILE
+        app.SYNC_CONFIG_FILE = self.sync_config_file
+        app.PRODUCT_KEY_FILE = os.path.join(self.temp_dir.name, "product_pillar_key.json")
 
     def tearDown(self):
+        app.SYNC_CONFIG_FILE = self.original_sync_config
+        app.PRODUCT_KEY_FILE = self.original_product_key
         self.temp_dir.cleanup()
 
     def test_normalize_incident_payloads_computes_duration_and_pillar(self):
@@ -62,6 +70,42 @@ class IncidentSyncTests(unittest.TestCase):
 
         self.assertFalse(os.path.exists(self.incidents_file))
         self.assertFalse(os.path.exists(self.other_file))
+
+    @mock.patch("incident_io_client.fetch_incidents")
+    def test_sync_filters_by_date_and_returns_samples(self, mock_fetch_incidents):
+        api_incidents = [
+            {
+                "incident_number": "INC-300",
+                "severity": {"name": "Sev2"},
+                "incident_type": {"name": "Operational Incident"},
+                "started_at": "2024-07-10T01:00:00Z",
+                "resolved_at": "2024-07-10T02:00:00Z",
+                "products": ["Search"],
+            },
+            {
+                "incident_number": "INC-301",
+                "severity": {"name": "Sev3"},
+                "incident_type": {"name": "Operational Incident"},
+                "started_at": "2023-05-01T10:00:00Z",
+                "resolved_at": "2023-05-01T10:30:00Z",
+                "products": ["Billing"],
+            },
+        ]
+
+        mock_fetch_incidents.return_value = api_incidents
+
+        summary = app.sync_incidents_from_api(
+            dry_run=True,
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+            include_samples=True,
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+
+        self.assertEqual(summary["fetched"], 2)
+        self.assertEqual(summary["added_incidents"], 1)
+        self.assertEqual(len(summary.get("samples", [])), 1)
 
 
 if __name__ == "__main__":

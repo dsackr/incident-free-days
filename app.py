@@ -17,6 +17,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "incidents.json")
 OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
+SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 DEFAULT_YEAR = 2025
 
 
@@ -56,6 +57,41 @@ def load_product_key():
 
     # Normalize keys to strip whitespace for consistent lookups
     return {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
+
+
+def load_sync_config():
+    if not os.path.exists(SYNC_CONFIG_FILE):
+        return {"cadence": "daily"}
+
+    try:
+        with open(SYNC_CONFIG_FILE, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {"cadence": "daily"}
+
+    if not isinstance(data, dict):
+        return {"cadence": "daily"}
+
+    data.setdefault("cadence", "daily")
+    return data
+
+
+def save_sync_config(config):
+    payload = {
+        "cadence": config.get("cadence", "daily"),
+        "base_url": config.get("base_url") or "",
+        "token": config.get("token") or "",
+        "start_date": config.get("start_date") or "",
+        "end_date": config.get("end_date") or "",
+        "last_sync": config.get("last_sync") or {},
+    }
+
+    try:
+        with open(SYNC_CONFIG_FILE, "w") as f:
+            json.dump(payload, f, indent=2)
+    except OSError:
+        # If we cannot persist, fall back to in-memory only behavior.
+        pass
 
 
 def parse_date(raw_value):
@@ -406,9 +442,16 @@ def normalize_incident_payloads(api_incident, mapping=None):
 def sync_incidents_from_api(
     *,
     dry_run=False,
+    start_date=None,
+    end_date=None,
+    token=None,
+    base_url=None,
+    include_samples=False,
     incidents_file=DATA_FILE,
     other_events_file=OTHER_EVENTS_FILE,
 ):
+    start_date_obj = parse_date(start_date) if start_date else None
+    end_date_obj = parse_date(end_date) if end_date else None
     mapping = load_product_key()
 
     incidents = load_events(incidents_file)
@@ -433,18 +476,37 @@ def sync_incidents_from_api(
     }
 
     try:
-        fetched = incident_io_client.fetch_incidents()
+        fetched = incident_io_client.fetch_incidents(
+            base_url=base_url,
+            token=token,
+        )
     except incident_io_client.IncidentAPIError as exc:
         return {"error": str(exc), "added_incidents": 0, "added_other_events": 0, "dry_run": dry_run}
 
     added_incidents = 0
     added_other_events = 0
+    sample_payloads = []
 
     incident_seen = set(existing_incidents)
     other_seen = set(existing_other)
 
     for api_incident in fetched:
-        for payload in normalize_incident_payloads(api_incident, mapping=mapping):
+        normalized = normalize_incident_payloads(api_incident, mapping=mapping)
+
+        filtered_payloads = []
+        for payload in normalized:
+            reported_value = payload.get("reported_at")
+            reported_dt = parse_datetime(reported_value)
+            reported_date = reported_dt.date() if reported_dt else None
+
+            if start_date_obj and (not reported_date or reported_date < start_date_obj):
+                continue
+            if end_date_obj and (not reported_date or reported_date > end_date_obj):
+                continue
+
+            filtered_payloads.append(payload)
+
+        for payload in filtered_payloads:
             lookup_key = (payload.get("inc_number"), (payload.get("product") or "").strip())
             is_operational = payload.get("event_type") == "Operational Incident"
 
@@ -463,15 +525,40 @@ def sync_incidents_from_api(
                 if not dry_run:
                     other_events.append(payload)
 
+            if include_samples and len(sample_payloads) < 10:
+                sample_payloads.append(
+                    {
+                        "source": {
+                            "id": api_incident.get("id") or api_incident.get("incident_id"),
+                            "name": api_incident.get("name"),
+                            "severity": api_incident.get("severity"),
+                            "started_at": payload.get("reported_at"),
+                            "resolved_at": payload.get("closed_at"),
+                        },
+                        "normalized": payload,
+                    }
+                )
+
     if not dry_run:
         save_events(incidents_file, incidents)
         save_events(other_events_file, other_events)
+
+        config = load_sync_config()
+        config["last_sync"] = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "added_incidents": added_incidents,
+            "added_other_events": added_other_events,
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+        }
+        save_sync_config(config)
 
     return {
         "fetched": len(fetched),
         "added_incidents": added_incidents,
         "added_other_events": added_other_events,
         "dry_run": dry_run,
+        "samples": sample_payloads if include_samples else [],
     }
 
 
@@ -498,6 +585,17 @@ def index():
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
     active_tab = request.args.get("tab", "incidents")
+
+    sync_config_raw = load_sync_config()
+    sync_config = {
+        "cadence": sync_config_raw.get("cadence", "daily"),
+        "base_url": sync_config_raw.get("base_url", ""),
+        "start_date": sync_config_raw.get("start_date", ""),
+        "end_date": sync_config_raw.get("end_date", ""),
+        "token_saved": bool(sync_config_raw.get("token")),
+        "last_sync": sync_config_raw.get("last_sync") or {},
+    }
+    env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -929,6 +1027,8 @@ def index():
         key_error=key_error,
         active_tab=active_tab,
         client_ip=client_ip,
+        sync_config=sync_config,
+        env_token_available=env_token_available,
     )
 
 
@@ -1331,10 +1431,68 @@ def upload_key_file():
 
 @app.route("/sync/incidents", methods=["GET", "POST"])
 def sync_incidents_endpoint():
-    dry_run = (request.args.get("dry_run") == "1") or (request.form.get("dry_run") == "1")
-    result = sync_incidents_from_api(dry_run=dry_run)
+    payload = request.get_json(silent=True) or {}
+
+    dry_run = (
+        request.args.get("dry_run") == "1"
+        or request.form.get("dry_run") == "1"
+        or payload.get("dry_run") in (True, "1", "true", "True")
+    )
+
+    start_date = payload.get("start_date") or request.args.get("start_date")
+    end_date = payload.get("end_date") or request.args.get("end_date")
+    base_url = payload.get("base_url") or request.args.get("base_url")
+    token = payload.get("token") or request.args.get("token")
+    include_samples = payload.get("include_samples", dry_run)
+
+    config = load_sync_config()
+    effective_token = token or config.get("token")
+    effective_base_url = base_url or config.get("base_url") or None
+    effective_start_date = start_date or config.get("start_date") or None
+    effective_end_date = end_date or config.get("end_date") or None
+
+    if payload.get("persist_settings"):
+        config.update(
+            {
+                "token": token or config.get("token") or "",
+                "base_url": base_url or config.get("base_url") or "",
+                "start_date": start_date or config.get("start_date") or "",
+                "end_date": end_date or config.get("end_date") or "",
+                "cadence": payload.get("cadence") or config.get("cadence", "daily"),
+            }
+        )
+        save_sync_config(config)
+
+    result = sync_incidents_from_api(
+        dry_run=dry_run,
+        start_date=effective_start_date,
+        end_date=effective_end_date,
+        token=effective_token,
+        base_url=effective_base_url,
+        include_samples=include_samples,
+    )
     status_code = 200 if not result.get("error") else 500
     return jsonify(result), status_code
+
+
+@app.route("/sync/config", methods=["POST"])
+def update_sync_config():
+    payload = request.get_json(silent=True) or {}
+    config = load_sync_config()
+
+    updated = {
+        "cadence": payload.get("cadence") or config.get("cadence", "daily"),
+        "base_url": payload.get("base_url") or "",
+        "token": payload.get("token") or config.get("token") or "",
+        "start_date": payload.get("start_date") or "",
+        "end_date": payload.get("end_date") or "",
+        "last_sync": config.get("last_sync") or {},
+    }
+
+    save_sync_config(updated)
+    sanitized = dict(updated)
+    sanitized["token"] = "" if not updated.get("token") else "saved"
+    return jsonify({"config": sanitized})
 
 
 if __name__ == "__main__":

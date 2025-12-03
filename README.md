@@ -77,8 +77,8 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    The app will now start on boot and can be managed via `systemctl`.
 
 3. **Report an incident**
-   - Open the app in a browser and switch to the **Report Incident** tab.
-   - Provide an incident number, date, severity, and impacted pillar, then submit.
+  - Open the app in a browser and switch to the **Configuration** tab.
+  - Use the **Manual incident entry** section to provide an incident number, date, severity, and impacted pillar, then submit.
 
 ## Data storage
 - Incidents are stored in `incidents.json` in the project root. The file is created on first save.
@@ -93,6 +93,14 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 ## Syncing from incident.io
 The app can pull incidents directly from incident.io so you do not need to manually upload CSV files.
 
+### Via the Configuration tab
+1. Open the app and go to **Configuration**.
+2. Enter your `INCIDENT_IO_API_TOKEN` and optional base URL override. Tokens are stored locally in `sync_config.json` and are never displayed back in the UI.
+3. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
+4. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
+5. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
+
+### Via the CLI or API
 1. Export your incident.io API token to the environment:
    ```bash
    export INCIDENT_IO_API_TOKEN="<token>"
@@ -110,7 +118,7 @@ The app can pull incidents directly from incident.io so you do not need to manua
    python app.py --sync-incidents
    ```
 
-You can also trigger the sync over HTTP using `GET /sync/incidents?dry_run=1` (dry run) or `POST /sync/incidents` to persist results.
+You can also trigger the sync over HTTP using `GET /sync/incidents?dry_run=1` (dry run) or `POST /sync/incidents` with a JSON payload (token, optional date range) to persist results.
 
 ## Repository structure
 - `app.py` — Flask application entrypoint and routing.
