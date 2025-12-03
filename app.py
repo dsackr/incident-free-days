@@ -755,7 +755,8 @@ def calendar_eink():
 
     # Weekday headers (Sun–Sat)
     calendar.setfirstweekday(calendar.SUNDAY)
-    weekdays = list(calendar.iterweekdays())  # e.g. [6, 0, 1, 2, 3, 4, 5]
+    first = calendar.firstweekday()
+    weekdays = [(first + i) % 7 for i in range(7)]
 
     for i, wd in enumerate(weekdays):
         label = calendar.day_abbr[wd]
