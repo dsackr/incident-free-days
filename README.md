@@ -9,11 +9,11 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 - Accepts incident dates as either `YYYY-MM-DD` (native date input) or `MM/DD/YYYY`.
 
 ## Getting started
-1. **Install dependencies**
+1. **Install dependencies** (Flask, Pillow, and related libraries)
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   pip install flask
+   pip install -r requirements.txt
    ```
 
 2. **Run the app**
@@ -41,7 +41,7 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    cd /opt/incident-free-days/app
    python -m venv .venv
    source .venv/bin/activate
-   pip install flask
+   pip install -r requirements.txt
    deactivate
    ```
 
@@ -102,3 +102,4 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 ## Exporting the calendar to an image
 - The calendar tab includes an **Export as Image** button that captures the visible calendar into a PNG.
 - The export runs completely in the browser (no external CDN dependency), so it works even in offline environments.
+- The server also provides `/calendar/eink.png`, which returns a 1600×1200 PNG calendar for the current month by default. You can override the period with `?year=YYYY&month=MM`. This endpoint is designed for consumption by external clients such as a Raspberry Pi driving a 13.3" e-ink display.

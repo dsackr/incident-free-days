@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, send_file, url_for
 from datetime import date, datetime, time, timedelta
 import csv
 import calendar
 import json
 import os
-from io import StringIO
+import datetime as dt
+from io import StringIO, BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 app = Flask(__name__)
 
@@ -711,6 +713,74 @@ def index():
         active_tab=active_tab,
         client_ip=client_ip,
     )
+
+
+@app.route("/calendar/eink.png")
+def calendar_eink():
+    now = dt.datetime.now()
+    try:
+        year = int(request.args.get("year", now.year))
+    except ValueError:
+        year = now.year
+
+    try:
+        month = int(request.args.get("month", now.month))
+    except ValueError:
+        month = now.month
+
+    if not 1 <= month <= 12:
+        month = now.month
+
+    W, H = 1600, 1200
+
+    img = Image.new("RGB", (W, H), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    font_title = ImageFont.load_default()
+    font_days = ImageFont.load_default()
+
+    title = f"{calendar.month_name[month]} {year}"
+    tw, th = draw.textsize(title, font=font_title)
+    draw.text(((W - tw) // 2, 10), title, font=font_title, fill=(0, 0, 0))
+
+    left_margin = 40
+    right_margin = 40
+    top_margin = 60
+    bottom_margin = 40
+
+    header_rows = 1
+    week_rows = 6
+
+    cell_w = (W - left_margin - right_margin) // 7
+    cell_h = (H - top_margin - bottom_margin) // (header_rows + week_rows)
+
+    calendar.setfirstweekday(calendar.SUNDAY)
+    weekdays = list(calendar.iterweekdays())
+    for i, wd in enumerate(weekdays):
+        label = calendar.day_abbr[wd]
+        x = left_margin + i * cell_w + 5
+        y = top_margin
+        draw.text((x, y), label, font=font_days, fill=(0, 0, 0))
+
+    cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
+    y_offset = top_margin + cell_h
+
+    for row_idx, week in enumerate(cal.monthdayscalendar(year, month)):
+        for col_idx, day in enumerate(week):
+            x0 = left_margin + col_idx * cell_w
+            y0 = y_offset + row_idx * cell_h
+            x1 = x0 + cell_w
+            y1 = y0 + cell_h
+
+            draw.rectangle([x0, y0, x1, y1], outline=(0, 0, 0))
+
+            if day != 0:
+                draw.text((x0 + 5, y0 + 5), str(day), font=font_days, fill=(0, 0, 0))
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
 
 
 @app.route("/add", methods=["POST"])
