@@ -732,54 +732,22 @@ def calendar_eink():
     # Prefer a readable TrueType font; fall back to default bitmap
     font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     font_bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    bitmap_fallback = False
     try:
         font_title = ImageFont.truetype(font_bold_path, 48)
         font_headers = ImageFont.truetype(font_bold_path, 32)
         font_days = ImageFont.truetype(font_path, 26)
     except OSError:
-        # If TrueType is unavailable (e.g., on the target device), still draw
-        # noticeably larger text by scaling the built-in bitmap font.
-        bitmap_fallback = True
         font_title = ImageFont.load_default()
         font_headers = font_title
         font_days = font_title
-
-    def measure_text(text, font, scale=1.0):
-        bbox = draw.textbbox((0, 0), text, font=font)
-        width = int((bbox[2] - bbox[0]) * scale)
-        height = int((bbox[3] - bbox[1]) * scale)
-        return width, height
-
-    def draw_scaled_text(xy, text, font, fill, scale=1.0):
-        if scale == 1.0:
-            draw.text(xy, text, font=font, fill=fill)
-            return
-
-        # Render once at native bitmap size, then enlarge the mask to avoid
-        # tiny default glyphs.
-        base_bbox = draw.textbbox((0, 0), text, font=font)
-        base_w = base_bbox[2] - base_bbox[0]
-        base_h = base_bbox[3] - base_bbox[1]
-        temp = Image.new("L", (base_w, base_h), 0)
-        temp_draw = ImageDraw.Draw(temp)
-        temp_draw.text((-base_bbox[0], -base_bbox[1]), text, font=font, fill=255)
-
-        scaled_w = max(1, int(base_w * scale))
-        scaled_h = max(1, int(base_h * scale))
-        mask = temp.resize((scaled_w, scaled_h), resample=Image.NEAREST)
-
-        colored = Image.new("RGBA", (scaled_w, scaled_h), (*fill, 0))
-        colored.putalpha(mask)
-        img.paste(colored, xy, mask)
 
     # Title: "December 2025"
     title = f"{calendar.month_name[month]} {year}"
 
     # Use textbbox for measurement to avoid removed FreeTypeFont.getsize
-    title_scale = 3.0 if bitmap_fallback else 1.0
-    tw, th = measure_text(title, font_title, scale=title_scale)
-    draw_scaled_text(((W - tw) // 2, 20), title, font_title, (0, 0, 0), scale=title_scale)
+    title_bbox = draw.textbbox((0, 0), title, font=font_title)
+    tw = title_bbox[2] - title_bbox[0]
+    draw.text(((W - tw) // 2, 20), title, font=font_title, fill=(0, 0, 0))
 
     # Layout margins
     left_margin = 60
@@ -801,11 +769,12 @@ def calendar_eink():
 
     for i, wd in enumerate(weekdays):
         label = calendar.day_abbr[wd]
-        label_scale = 2.2 if bitmap_fallback else 1.0
-        lw, lh = measure_text(label, font_headers, scale=label_scale)
+        label_bbox = draw.textbbox((0, 0), label, font=font_headers)
+        lw = label_bbox[2] - label_bbox[0]
+        lh = label_bbox[3] - label_bbox[1]
         x = left_margin + i * cell_w + (cell_w - lw) // 2
         y = top_margin + (cell_h - lh) // 2
-        draw_scaled_text((x, y), label, font_headers, (0, 0, 0), scale=label_scale)
+        draw.text((x, y), label, font=font_headers, fill=(0, 0, 0))
 
     # Pull incidents and classify each calendar day
     incidents = [
@@ -895,8 +864,7 @@ def calendar_eink():
             # Day number in top-left of cell
             if day.month == month:
                 label = str(day.day)
-                day_scale = 2.0 if bitmap_fallback else 1.0
-                draw_scaled_text((x0 + 8, y0 + 6), label, font_days, text_color, scale=day_scale)
+                draw.text((x0 + 8, y0 + 6), label, font=font_days, fill=text_color)
 
     # Return as PNG
     buf = BytesIO()
