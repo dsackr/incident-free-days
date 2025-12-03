@@ -41,7 +41,7 @@
                             data-view-mode="{{ view_mode }}"
                             data-year="{{ year }}"
                             data-month-name="{{ calendar.month_name[month_selection] if month_selection else '' }}"
-                            data-target="incident-export-target"
+                            data-target="incident-calendar-export"
                         >
                             Export as Image
                         </button>
@@ -159,62 +159,64 @@
                     <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
                 </div>
 
-                <div class="legend">
-                    <span class="legend-item">
-                        <span class="legend-color legend-grey"></span> No data / future
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-green"></span> No incident
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-yellow"></span> Sev6 incident
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-red-light"></span> 1 incident
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-red-medium"></span> 2-3 incidents
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-red"></span> 4+ incidents
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-sev1-marker"></span> Sev1 present
-                    </span>
-                </div>
-
-                <div class="months-grid {% if incident_months|length == 1 %}single-column{% endif %}">
-                    {% for month in incident_months %}
-                    <div class="month">
-                        <div class="month-name">{{ month.name }}</div>
-                        <table class="month-table">
-                            <thead>
-                                <tr>
-                                    <th>S</th>
-                                    <th>M</th>
-                                    <th>T</th>
-                                    <th>W</th>
-                                    <th>T</th>
-                                    <th>F</th>
-                                    <th>S</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for week in month.weeks %}
-                                <tr>
-                                    {% for day in week %}
-                                    {% if day.day %}
-                                        <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="incidents">{{ day.day }}</td>
-                                    {% else %}
-                                        <td class="{{ day.css_class }}"></td>
-                                    {% endif %}
-                                    {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div id="incident-calendar-export">
+                    <div class="legend">
+                        <span class="legend-item">
+                            <span class="legend-color legend-grey"></span> No data / future
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-green"></span> No incident
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-yellow"></span> Sev6 incident
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-red-light"></span> 1 incident
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-red-medium"></span> 2-3 incidents
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-red"></span> 4+ incidents
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-sev1-marker"></span> Sev1 present
+                        </span>
                     </div>
-                    {% endfor %}
+
+                    <div class="months-grid {% if incident_months|length == 1 %}single-column{% endif %}">
+                        {% for month in incident_months %}
+                        <div class="month">
+                            <div class="month-name">{{ month.name }}</div>
+                            <table class="month-table">
+                                <thead>
+                                    <tr>
+                                        <th>S</th>
+                                        <th>M</th>
+                                        <th>T</th>
+                                        <th>W</th>
+                                        <th>T</th>
+                                        <th>F</th>
+                                        <th>S</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for week in month.weeks %}
+                                    <tr>
+                                        {% for day in week %}
+                                        {% if day.day %}
+                                            <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="incidents">{{ day.day }}</td>
+                                        {% else %}
+                                            <td class="{{ day.css_class }}"></td>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
@@ -222,21 +224,6 @@
 
         <div id="others-tab" class="tab-content {% if active_tab == 'others' %}active{% endif %}">
             <div id="other-export-target">
-                <div class="legend">
-                    <span class="legend-item">
-                        <span class="legend-color legend-grey"></span> No event
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-yellow"></span> Operational Event
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-orange"></span> Deployment Event
-                    </span>
-                    <span class="legend-item">
-                        <span class="legend-color legend-red"></span> War Room
-                    </span>
-                </div>
-
                 <div class="calendar-header">
                     <div class="calendar-nav">
                         <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
@@ -357,38 +344,55 @@
                     {% endif %}
                 </div>
 
-                <div class="months-grid {% if other_months|length == 1 %}single-column{% endif %}">
-                    {% for month in other_months %}
-                    <div class="month">
-                        <div class="month-name">{{ month.name }}</div>
-                        <table class="month-table">
-                            <thead>
-                                <tr>
-                                    <th>S</th>
-                                    <th>M</th>
-                                    <th>T</th>
-                                    <th>W</th>
-                                    <th>T</th>
-                                    <th>F</th>
-                                    <th>S</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for week in month.weeks %}
-                                <tr>
-                                    {% for day in week %}
-                                    {% if day.day %}
-                                        <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="others">{{ day.day }}</td>
-                                    {% else %}
-                                        <td class="{{ day.css_class }}"></td>
-                                    {% endif %}
-                                    {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div id="other-calendar-export">
+                    <div class="legend">
+                        <span class="legend-item">
+                            <span class="legend-color legend-grey"></span> No event
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-yellow"></span> Operational Event
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-orange"></span> Deployment Event
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color legend-red"></span> War Room
+                        </span>
                     </div>
-                    {% endfor %}
+
+                    <div class="months-grid {% if other_months|length == 1 %}single-column{% endif %}">
+                        {% for month in other_months %}
+                        <div class="month">
+                            <div class="month-name">{{ month.name }}</div>
+                            <table class="month-table">
+                                <thead>
+                                    <tr>
+                                        <th>S</th>
+                                        <th>M</th>
+                                        <th>T</th>
+                                        <th>W</th>
+                                        <th>T</th>
+                                        <th>F</th>
+                                        <th>S</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for week in month.weeks %}
+                                    <tr>
+                                        {% for day in week %}
+                                        {% if day.day %}
+                                            <td class="{{ day.css_class }} day-cell" data-date="{{ day.date_str }}" data-calendar-kind="others">{{ day.day }}</td>
+                                        {% else %}
+                                            <td class="{{ day.css_class }}"></td>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
 
                 <div class="calendar-actions">
@@ -398,7 +402,7 @@
                         data-view-mode="{{ view_mode }}"
                         data-year="{{ year }}"
                         data-month-name="{{ calendar.month_name[month_selection] if month_selection else '' }}"
-                        data-target="other-export-target"
+                        data-target="other-calendar-export"
                     >
                         Export as Image
                     </button>
