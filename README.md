@@ -11,6 +11,7 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 ## Getting started
 1. **Install dependencies** (Flask, Pillow, and related libraries)
    ```bash
+   sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
    python -m venv .venv
    source .venv/bin/activate
    pip install -r requirements.txt
