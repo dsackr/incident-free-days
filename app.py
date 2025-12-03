@@ -736,10 +736,12 @@ def calendar_eink():
         font_title = ImageFont.truetype(font_bold_path, 48)
         font_headers = ImageFont.truetype(font_bold_path, 32)
         font_days = ImageFont.truetype(font_path, 26)
+        font_incident = ImageFont.truetype(font_path, 20)
     except OSError:
         font_title = ImageFont.load_default()
         font_headers = font_title
         font_days = font_title
+        font_incident = font_title
 
     # Title: "December 2025"
     title = f"{calendar.month_name[month]} {year}"
@@ -784,10 +786,16 @@ def calendar_eink():
     ]
 
     incidents_by_date = {}
+    incidents_by_inc_number = {}
     for event in incidents:
+        inc_number_raw = (event.get("inc_number") or "").strip()
+        severity_raw = (event.get("severity") or "").strip()
+
         for day in compute_event_dates(event, duration_enabled=False):
             if day.year == year and day.month == month:
                 incidents_by_date.setdefault(day, []).append(event)
+                if inc_number_raw:
+                    incidents_by_inc_number.setdefault(day, {})[inc_number_raw] = severity_raw
 
     colors = {
         "none": (208, 208, 208),  # grey
@@ -865,6 +873,25 @@ def calendar_eink():
             if day.month == month:
                 label = str(day.day)
                 draw.text((x0 + 8, y0 + 6), label, font=font_days, fill=text_color)
+
+                incidents_for_day = incidents_by_inc_number.get(day, {})
+                if incidents_for_day:
+                    text_y = y0 + 34
+                    line_spacing = 4
+                    for inc_number, severity_value in sorted(incidents_for_day.items()):
+                        normalized_inc = (
+                            inc_number if inc_number.upper().startswith("INC-") else f"INC-{inc_number}"
+                        )
+                        severity_label = str(severity_value).strip()
+                        if severity_label.lower().startswith("other"):
+                            severity_label = "6"
+                        severity_label = f"Sev{severity_label or '?'}"
+                        line = f"{normalized_inc}: {severity_label}"
+
+                        line_bbox = draw.textbbox((0, 0), line, font=font_incident)
+                        line_height = line_bbox[3] - line_bbox[1]
+                        draw.text((x0 + 8, text_y), line, font=font_incident, fill=text_color)
+                        text_y += line_height + line_spacing
 
     # Return as PNG
     buf = BytesIO()
