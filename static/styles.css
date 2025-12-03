@@ -453,6 +453,13 @@ h1 {
     border: 1px solid #eee;
 }
 
+/* Monthly view emphasizes larger, more square cells */
+.months-grid.single-column .month-table th,
+.months-grid.single-column .month-table td {
+    padding: 12px 8px;
+    height: 56px;
+}
+
 .month-table th {
     background: #fafafa;
     font-weight: 700;
