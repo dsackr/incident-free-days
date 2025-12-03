@@ -109,16 +109,8 @@ h1 {
 }
 
 .legend-sev1-marker {
-    position: relative;
     background: #f2a7a7;
-}
-
-.legend-sev1-marker::after {
-    content: "";
-    position: absolute;
-    inset: 3px;
-    border-radius: 50%;
-    background: #000000;
+    border: 2px solid #7f0000;
 }
 
 .legend-yellow {
@@ -527,16 +519,9 @@ h1 {
     transform: scale(1.02);
 }
 
-.day-sev1-marker::after {
-    content: "";
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #000000;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+.day-sev1-marker {
+    border: 2px solid #7f0000;
+    box-sizing: border-box;
 }
 
 .empty {
