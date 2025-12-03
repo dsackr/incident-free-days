@@ -741,8 +741,11 @@ def calendar_eink():
 
     def measure(text, font):
         if hasattr(draw, "textbbox"):
-            x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
-            return x1 - x0, y1 - y0
+            try:
+                x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
+                return x1 - x0, y1 - y0
+            except ValueError:
+                pass
         return draw.textsize(text, font=font)
 
     title = f"{calendar.month_name[month]} {year}"
