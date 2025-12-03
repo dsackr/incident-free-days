@@ -1,2 +1,3 @@
 Flask
 Pillow
+# System dependency: a TrueType font such as DejaVu Sans (install via `apt-get install -y fonts-dejavu-core` on Debian/Ubuntu)
