@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, send_file, url_for
+import re
 from datetime import date, datetime, time, timedelta
 import csv
 import calendar
@@ -146,6 +147,23 @@ def shift_utc_to_est(dt):
 
 def is_sev6(value):
     return str(value) == "Other (Sev 6)"
+
+
+def normalize_severity_label(value):
+    """Extract the numeric severity value from a variety of label formats."""
+
+    text = (str(value) or "").strip()
+    if not text:
+        return "?"
+
+    if text.lower().startswith("other"):
+        return "6"
+
+    match = re.search(r"([1-6])", text)
+    if match:
+        return match.group(1)
+
+    return text
 
 
 def compute_event_dates(event, duration_enabled=False):
@@ -882,10 +900,7 @@ def calendar_eink():
                         normalized_inc = (
                             inc_number if inc_number.upper().startswith("INC-") else f"INC-{inc_number}"
                         )
-                        severity_label = str(severity_value).strip()
-                        if severity_label.lower().startswith("other"):
-                            severity_label = "6"
-                        severity_label = f"Sev{severity_label or '?'}"
+                        severity_label = f"Sev{normalize_severity_label(severity_value)}"
                         line = f"{normalized_inc}: {severity_label}"
 
                         line_bbox = draw.textbbox((0, 0), line, font=font_incident)
