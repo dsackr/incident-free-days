@@ -736,8 +736,9 @@ def calendar_eink():
     # Title: "December 2025"
     title = f"{calendar.month_name[month]} {year}"
 
-    # Use ONLY textsize for measurement to avoid textbbox/TrueType issues
-    tw, th = draw.textsize(title, font=font_title)
+    # Use textbbox for measurement to avoid removed FreeTypeFont.getsize
+    title_bbox = draw.textbbox((0, 0), title, font=font_title)
+    tw, th = title_bbox[2] - title_bbox[0], title_bbox[3] - title_bbox[1]
     draw.text(((W - tw) // 2, 10), title, font=font_title, fill=(0, 0, 0))
 
     # Layout margins
