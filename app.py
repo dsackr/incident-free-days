@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, send_file, url_for
+from flask import Flask, jsonify, render_template, request, redirect, send_file, url_for
 import re
 from datetime import date, datetime, time, timedelta
 import csv
@@ -8,6 +8,8 @@ import os
 import datetime as dt
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
+
+import incident_io_client
 
 app = Flask(__name__)
 
@@ -274,6 +276,203 @@ def get_client_ip(req):
         return real_ip
 
     return (req.remote_addr or "Unknown").strip()
+
+
+def _extract_product_values(api_incident):
+    products = []
+
+    def add_value(value):
+        if value is None:
+            return
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if cleaned:
+                products.append(cleaned)
+            return
+
+        if isinstance(value, dict):
+            for key in ("name", "full_name", "slug", "id"):
+                candidate = value.get(key)
+                if candidate:
+                    products.append(str(candidate).strip())
+                    return
+            return
+
+        if isinstance(value, list):
+            for item in value:
+                add_value(item)
+
+    for key in (
+        "products",
+        "services",
+        "service",
+        "teams",
+        "impacted_services",
+        "components",
+    ):
+        add_value(api_incident.get(key))
+
+    if not products:
+        return [""]
+
+    deduped = []
+    seen = set()
+    for product in products:
+        if product and product not in seen:
+            seen.add(product)
+            deduped.append(product)
+
+    return deduped or [""]
+
+
+def normalize_incident_payloads(api_incident, mapping=None):
+    mapping = mapping if mapping is not None else load_product_key()
+
+    inc_number = None
+    for key in ("incident_number", "incident_id", "id", "reference", "name"):
+        value = api_incident.get(key)
+        if value:
+            inc_number = str(value).strip()
+            break
+
+    severity_field = api_incident.get("severity") or api_incident.get("severity_level")
+    if isinstance(severity_field, dict):
+        severity = (
+            severity_field.get("name")
+            or severity_field.get("label")
+            or severity_field.get("id")
+            or ""
+        )
+    else:
+        severity = severity_field or ""
+
+    event_type_field = api_incident.get("incident_type") or api_incident.get("type")
+    if isinstance(event_type_field, dict):
+        event_type = event_type_field.get("name") or event_type_field.get("label") or "Operational Incident"
+    else:
+        event_type = (event_type_field or "Operational Incident").strip() or "Operational Incident"
+
+    reported_raw = (
+        api_incident.get("started_at")
+        or api_incident.get("started")
+        or api_incident.get("created_at")
+        or api_incident.get("created")
+        or api_incident.get("detected_at")
+    )
+    closed_raw = (
+        api_incident.get("resolved_at")
+        or api_incident.get("closed_at")
+        or api_incident.get("ended_at")
+        or api_incident.get("completed_at")
+    )
+
+    reported_dt = shift_utc_to_est(parse_datetime(reported_raw))
+    closed_dt = shift_utc_to_est(parse_datetime(closed_raw))
+
+    raw_duration = api_incident.get("duration_seconds") or api_incident.get("duration") or 0
+    try:
+        duration_seconds = int(raw_duration) if raw_duration is not None else 0
+    except (TypeError, ValueError):
+        duration_seconds = 0
+
+    if not duration_seconds and reported_dt and closed_dt:
+        computed = int((closed_dt - reported_dt).total_seconds())
+        duration_seconds = max(0, computed)
+
+    if not inc_number or reported_dt is None:
+        return []
+
+    product_values = _extract_product_values(api_incident)
+    payloads = []
+
+    for product in product_values:
+        payloads.append(
+            {
+                "inc_number": inc_number,
+                "reported_at": reported_dt.isoformat(),
+                "closed_at": closed_dt.isoformat() if closed_dt else "",
+                "duration_seconds": duration_seconds,
+                "severity": severity,
+                "pillar": resolve_pillar(product, mapping=mapping),
+                "product": product,
+                "event_type": event_type,
+            }
+        )
+
+    return payloads
+
+
+def sync_incidents_from_api(
+    *,
+    dry_run=False,
+    incidents_file=DATA_FILE,
+    other_events_file=OTHER_EVENTS_FILE,
+):
+    mapping = load_product_key()
+
+    incidents = load_events(incidents_file)
+    other_events = load_events(other_events_file)
+
+    existing_incidents = {
+        (
+            inc.get("inc_number"),
+            (inc.get("product") or "").strip(),
+        )
+        for inc in incidents
+        if inc.get("inc_number")
+    }
+
+    existing_other = {
+        (
+            evt.get("inc_number"),
+            (evt.get("product") or "").strip(),
+        )
+        for evt in other_events
+        if evt.get("inc_number")
+    }
+
+    try:
+        fetched = incident_io_client.fetch_incidents()
+    except incident_io_client.IncidentAPIError as exc:
+        return {"error": str(exc), "added_incidents": 0, "added_other_events": 0, "dry_run": dry_run}
+
+    added_incidents = 0
+    added_other_events = 0
+
+    incident_seen = set(existing_incidents)
+    other_seen = set(existing_other)
+
+    for api_incident in fetched:
+        for payload in normalize_incident_payloads(api_incident, mapping=mapping):
+            lookup_key = (payload.get("inc_number"), (payload.get("product") or "").strip())
+            is_operational = payload.get("event_type") == "Operational Incident"
+
+            if is_operational:
+                if lookup_key in incident_seen:
+                    continue
+                added_incidents += 1
+                incident_seen.add(lookup_key)
+                if not dry_run:
+                    incidents.append(payload)
+            else:
+                if lookup_key in other_seen:
+                    continue
+                added_other_events += 1
+                other_seen.add(lookup_key)
+                if not dry_run:
+                    other_events.append(payload)
+
+    if not dry_run:
+        save_events(incidents_file, incidents)
+        save_events(other_events_file, other_events)
+
+    return {
+        "fetched": len(fetched),
+        "added_incidents": added_incidents,
+        "added_other_events": added_other_events,
+        "dry_run": dry_run,
+    }
 
 
 @app.route("/", methods=["GET"])
@@ -1130,6 +1329,35 @@ def upload_key_file():
     return redirect(url_for("index", key_uploaded=1))
 
 
+@app.route("/sync/incidents", methods=["GET", "POST"])
+def sync_incidents_endpoint():
+    dry_run = (request.args.get("dry_run") == "1") or (request.form.get("dry_run") == "1")
+    result = sync_incidents_from_api(dry_run=dry_run)
+    status_code = 200 if not result.get("error") else 500
+    return jsonify(result), status_code
+
+
 if __name__ == "__main__":
-    # For the Pi
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Incident Free Days")
+    parser.add_argument(
+        "--sync-incidents",
+        action="store_true",
+        help="Fetch incidents from incident.io and persist them to the local data files.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the sync without writing to incidents.json/others.json.",
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind the Flask server")
+    parser.add_argument("--port", default=8080, type=int, help="Port for the Flask server")
+
+    args = parser.parse_args()
+
+    if args.sync_incidents:
+        summary = sync_incidents_from_api(dry_run=args.dry_run)
+        print(json.dumps(summary, indent=2))
+    else:
+        app.run(host=args.host, port=args.port, debug=False)
