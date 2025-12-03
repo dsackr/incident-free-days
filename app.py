@@ -739,8 +739,14 @@ def calendar_eink():
     font_title = ImageFont.load_default()
     font_days = ImageFont.load_default()
 
+    def measure(text, font):
+        if hasattr(draw, "textbbox"):
+            x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
+            return x1 - x0, y1 - y0
+        return draw.textsize(text, font=font)
+
     title = f"{calendar.month_name[month]} {year}"
-    tw, th = draw.textsize(title, font=font_title)
+    tw, th = measure(title, font_title)
     draw.text(((W - tw) // 2, 10), title, font=font_title, fill=(0, 0, 0))
 
     left_margin = 40
