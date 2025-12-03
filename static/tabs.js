@@ -279,7 +279,10 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     const renderWithInlineSvg = async (exportTarget) => {
-        if (!exportTarget) return null;
+        if (!exportTarget) {
+            console.error("Inline SVG export failed: no export target provided.");
+            return null;
+        }
 
         let svgUrl = null;
 
@@ -319,18 +322,53 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     const renderWithHtml2Canvas = async (exportTarget) => {
-        if (typeof html2canvas !== "function" || !exportTarget) return null;
+        if (!exportTarget) {
+            console.error("html2canvas export failed: no export target provided.");
+            return null;
+        }
+
+        if (typeof html2canvas !== "function") {
+            console.error("html2canvas export failed: library not loaded or blocked by CSP/SRI.");
+            return null;
+        }
 
         try {
+            const externalImages = Array.from(exportTarget.querySelectorAll("img")).filter((img) => {
+                try {
+                    const url = new URL(img.src, window.location.href);
+                    return url.origin !== window.location.origin;
+                } catch (err) {
+                    return false;
+                }
+            });
+
+            externalImages.forEach((img) => {
+                // Encourage safe CORS requests so canvases stay untainted by external assets.
+                if (!img.crossOrigin) {
+                    img.crossOrigin = "anonymous";
+                }
+            });
+
             const snapshot = await html2canvas(exportTarget, {
                 scale: 2,
                 backgroundColor: "#ffffff",
                 useCORS: true,
+                onclone: (clonedDoc) => {
+                    externalImages.forEach((img) => {
+                        const selector = img.getAttribute("data-export-selector");
+                        const clonedImg = selector
+                            ? clonedDoc.querySelector(selector)
+                            : clonedDoc.querySelector(`img[src='${img.src}']`);
+                        if (clonedImg && !clonedImg.crossOrigin) {
+                            clonedImg.crossOrigin = "anonymous";
+                        }
+                    });
+                },
             });
 
             return { canvas: snapshot };
         } catch (err) {
-            console.warn("html2canvas capture failed, falling back to inline SVG", err);
+            console.error("html2canvas capture failed; will try inline SVG fallback.", err);
             return null;
         }
     };
@@ -338,7 +376,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const exportCalendar = async (exportButton) => {
         const targetId = exportButton?.dataset?.target;
         const exportTarget = targetId ? document.getElementById(targetId) : null;
-        if (!exportButton || !exportTarget) return;
+        if (!exportButton) {
+            console.error("Export failed: export button reference is missing.");
+            alert("Sorry, the calendar could not be exported. Please try again.");
+            return;
+        }
+        if (!exportTarget) {
+            console.error("Export failed: no export target found for", targetId);
+            alert("Sorry, the calendar could not be exported. Please try again.");
+            return;
+        }
 
         let cleanup = null;
 
@@ -397,14 +444,21 @@ document.addEventListener("DOMContentLoaded", function () {
             const sanitizedMonth = monthName ? `-${monthName.replace(/\s+/g, "-")}` : "";
             const filename = `incident-calendar-${viewMode}-${year}${sanitizedMonth}.png`;
 
-            canvas.toBlob((blob) => {
-                if (!blob) return;
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = filename;
-                link.click();
-                URL.revokeObjectURL(link.href);
-            });
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) {
+                        console.error("Calendar export failed: browser could not generate PNG blob (possible CSP/canvas restriction).");
+                        alert("Sorry, the calendar could not be exported. Please try again.");
+                        return;
+                    }
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                },
+                "image/png"
+            );
         } catch (err) {
             console.error("Calendar export failed", err);
             alert("Sorry, the calendar could not be exported. Please try again.");
