@@ -717,62 +717,55 @@ def index():
 
 @app.route("/calendar/eink.png")
 def calendar_eink():
+    # Default to current month/year if not provided
     now = dt.datetime.now()
-    try:
-        year = int(request.args.get("year", now.year))
-    except ValueError:
-        year = now.year
+    year = int(request.args.get("year", now.year))
+    month = int(request.args.get("month", now.month))
 
-    try:
-        month = int(request.args.get("month", now.month))
-    except ValueError:
-        month = now.month
-
-    if not 1 <= month <= 12:
-        month = now.month
-
+    # E-ink panel resolution
     W, H = 1600, 1200
 
+    # White background, RGB
     img = Image.new("RGB", (W, H), (255, 255, 255))
     draw = ImageDraw.Draw(img)
 
+    # Simple bitmap fonts (no TrueType required)
     font_title = ImageFont.load_default()
     font_days = ImageFont.load_default()
 
-    def measure(text, font):
-        if hasattr(draw, "textbbox"):
-            try:
-                x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
-                return x1 - x0, y1 - y0
-            except ValueError:
-                pass
-        return draw.textsize(text, font=font)
-
+    # Title: "December 2025"
     title = f"{calendar.month_name[month]} {year}"
-    tw, th = measure(title, font_title)
+
+    # Use ONLY textsize for measurement to avoid textbbox/TrueType issues
+    tw, th = draw.textsize(title, font=font_title)
     draw.text(((W - tw) // 2, 10), title, font=font_title, fill=(0, 0, 0))
 
+    # Layout margins
     left_margin = 40
     right_margin = 40
     top_margin = 60
     bottom_margin = 40
 
+    # 1 row for weekday headers + up to 6 weeks
     header_rows = 1
     week_rows = 6
 
     cell_w = (W - left_margin - right_margin) // 7
     cell_h = (H - top_margin - bottom_margin) // (header_rows + week_rows)
 
+    # Weekday headers (Sun–Sat)
     calendar.setfirstweekday(calendar.SUNDAY)
-    weekdays = list(calendar.iterweekdays())
+    weekdays = list(calendar.iterweekdays())  # e.g. [6, 0, 1, 2, 3, 4, 5]
+
     for i, wd in enumerate(weekdays):
         label = calendar.day_abbr[wd]
         x = left_margin + i * cell_w + 5
         y = top_margin
         draw.text((x, y), label, font=font_days, fill=(0, 0, 0))
 
+    # Calendar grid
     cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
-    y_offset = top_margin + cell_h
+    y_offset = top_margin + cell_h  # below weekday headers
 
     for row_idx, week in enumerate(cal.monthdayscalendar(year, month)):
         for col_idx, day in enumerate(week):
@@ -781,11 +774,14 @@ def calendar_eink():
             x1 = x0 + cell_w
             y1 = y0 + cell_h
 
+            # Cell border
             draw.rectangle([x0, y0, x1, y1], outline=(0, 0, 0))
 
             if day != 0:
+                # Day number in top-left of cell
                 draw.text((x0 + 5, y0 + 5), str(day), font=font_days, fill=(0, 0, 0))
 
+    # Return as PNG
     buf = BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
