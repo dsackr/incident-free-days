@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, render_template, request, redirect, send_file, url_for
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 import csv
 import calendar
 import json
@@ -215,7 +216,10 @@ def shift_utc_to_est(dt):
     if dt is None:
         return None
 
-    return dt - timedelta(hours=5)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    return dt.astimezone(ZoneInfo("America/New_York"))
 
 
 def is_sev6(value):
@@ -410,13 +414,13 @@ def _extract_reported_date(api_incident):
         parsed = parse_datetime(raw_value)
         if parsed:
             reported = shift_utc_to_est(parsed)
-            return reported.date(), reported.isoformat()
+            return reported.date(), reported.isoformat(timespec="seconds")
 
     created_raw = api_incident.get("created_at")
     created_dt = parse_datetime(created_raw)
     if created_dt:
         reported = shift_utc_to_est(created_dt)
-        return reported.date(), reported.isoformat()
+        return reported.date(), reported.isoformat(timespec="seconds")
 
     return None, None
 

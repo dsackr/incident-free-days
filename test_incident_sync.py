@@ -61,7 +61,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["severity"], "Other (Sev 6)")
         self.assertEqual(payload["product"], "SIS Ohio")
         self.assertEqual(payload["pillar"], "Student Solutions")
-        self.assertEqual(payload["reported_at"], "2025-12-03T17:32:14.019000")
+        self.assertEqual(payload["reported_at"], "2025-12-03T17:32:14-05:00")
 
     def test_normalize_incident_payloads_fallbacks_to_created_and_unknowns(self):
         api_incident = {
@@ -79,7 +79,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["severity"], "Sev 1")
         self.assertEqual(payload["product"], "Unknown")
         self.assertEqual(payload["pillar"], "Unknown")
-        self.assertEqual(payload["reported_at"], "2024-01-31T19:00:00")
+        self.assertEqual(payload["reported_at"], "2024-01-31T19:00:00-05:00")
 
     def test_normalize_incident_payloads_splits_multiple_products(self):
         with open(app.PRODUCT_KEY_FILE, "w", encoding="utf-8") as f:
@@ -120,7 +120,7 @@ class IncidentSyncTests(unittest.TestCase):
             elif payload["product"] == "Product B":
                 self.assertEqual(payload["pillar"], "Pillar B")
             self.assertEqual(payload["date"], "2024-07-09")
-            self.assertEqual(payload["reported_at"], "2024-07-09T20:00:00")
+            self.assertEqual(payload["reported_at"], "2024-07-09T21:00:00-04:00")
 
     def test_normalize_incident_payloads_uses_incident_type(self):
         api_incident = {
