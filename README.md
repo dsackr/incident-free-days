@@ -78,7 +78,6 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 
 3. **Report an incident**
 - Open the app in a browser and switch to the **Configuration** tab.
-- Use the **Field mapping** section to control how incident.io fields populate the calendar columns before running a sync.
 
 ## Data storage
 - Incidents are stored in `incidents.json` in the project root. The file is created on first save.
@@ -96,10 +95,9 @@ The app can pull incidents directly from incident.io so you do not need to manua
 ### Via the Configuration tab
 1. Open the app and go to **Configuration**.
 2. Enter your `INCIDENT_IO_API_TOKEN` and optional base URL override. Tokens are stored locally in `sync_config.json` and are never displayed back in the UI.
-3. Map incident.io fields (incident number, timestamps, severity, duration, products/services) to the columns the calendar expects. Comma-separated values are checked in order.
-4. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
-5. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
-6. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
+3. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
+4. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
+5. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
 
 ### Via the CLI or API
 1. Export your incident.io API token to the environment:
@@ -128,9 +126,8 @@ You can also trigger the sync over HTTP using `GET /sync/incidents?dry_run=1` (d
 - `static/tabs.js` — Simple tab switcher for the UI and HTML-to-image export logic.
 
 ## Importing data and pillar key mapping
-- CSV uploads require a product → pillar key JSON file to be present in the app directory. Upload the key first using the **Upload product → pillar key** form; the key is saved alongside `incidents.json`.
-- When a CSV is imported, pillars are populated from the uploaded key using the product name. The pillar values in the CSV are ignored.
-- Duplicate incident numbers are skipped when adding incidents manually or via CSV import.
+- Upload a product → pillar key JSON file using the **Upload product → pillar key** form; the key is saved alongside `incidents.json`.
+- Duplicate incident numbers are skipped when adding incidents via sync.
 
 ## Exporting the calendar to an image
 - The calendar tab includes an **Export as Image** button that captures the visible calendar into a PNG.

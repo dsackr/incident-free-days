@@ -1098,7 +1098,6 @@ def index():
         client_ip=client_ip,
         sync_config=sync_config,
         env_token_available=env_token_available,
-        default_field_mapping=DEFAULT_FIELD_MAPPING,
     )
 
 

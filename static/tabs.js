@@ -523,18 +523,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const resultsEl = document.getElementById("sync-results");
     const previewBody = document.getElementById("mapping-preview-body");
     const statusPillContainer = document.getElementById("sync-status-pill");
-    const mappingStatusPill = document.getElementById("mapping-status-pill");
-    const saveMappingButton = document.getElementById("save-field-mapping");
-    const resetMappingButton = document.getElementById("reset-field-mapping");
-    const mappingInputs = {
-        inc_number: document.getElementById("map-inc-number"),
-        severity: document.getElementById("map-severity"),
-        event_type: document.getElementById("map-event-type"),
-        duration_seconds: document.getElementById("map-duration"),
-        reported_at: document.getElementById("map-reported-at"),
-        closed_at: document.getElementById("map-closed-at"),
-        products: document.getElementById("map-products"),
-    };
     const syncConfigData = readJsonFromScript("sync-config-data") || {};
 
     const setStatusPill = (status, text) => {
@@ -546,17 +534,6 @@ document.addEventListener("DOMContentLoaded", function () {
         pill.className = `status-pill ${status}`;
         pill.textContent = text;
         statusPillContainer.appendChild(pill);
-    };
-
-    const setMappingStatus = (status, text) => {
-        if (!mappingStatusPill) return;
-        mappingStatusPill.innerHTML = "";
-        if (!status || !text) return;
-
-        const pill = document.createElement("span");
-        pill.className = `status-pill ${status}`;
-        pill.textContent = text;
-        mappingStatusPill.appendChild(pill);
     };
 
     const renderSamples = (samples) => {
@@ -598,32 +575,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     };
 
-    const parseCsvList = (value) =>
-        (value || "")
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean);
-
-    const populateMappingInputs = () => {
-        const mapping = syncConfigData?.field_mapping || {};
-        Object.entries(mappingInputs).forEach(([key, input]) => {
-            if (!input) return;
-            const values = mapping[key];
-            if (Array.isArray(values)) {
-                input.value = values.join(", ");
-            }
-        });
-    };
-
-    const readMappingInputs = () => {
-        const mapping = {};
-        Object.entries(mappingInputs).forEach(([key, input]) => {
-            if (!input) return;
-            mapping[key] = parseCsvList(input.value);
-        });
-        return mapping;
-    };
-
     const renderResults = (result) => {
         if (!resultsEl) return;
         if (!result) {
@@ -657,7 +608,6 @@ document.addEventListener("DOMContentLoaded", function () {
             include_samples: true,
             persist_settings: true,
             cadence: cadenceSelect?.value || "daily",
-            field_mapping: readMappingInputs(),
         };
     };
 
@@ -702,7 +652,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     cadence: cadenceSelect?.value || "daily",
                     start_date: startDateInput?.value || undefined,
                     end_date: endDateInput?.value || undefined,
-                    field_mapping: readMappingInputs(),
                 }),
             });
 
@@ -720,41 +669,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
-    const handleSaveMapping = async () => {
-        setMappingStatus("info", "Saving mapping");
-        try {
-            const response = await fetch("/sync/config", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ field_mapping: readMappingInputs() }),
-            });
-
-            if (!response.ok) {
-                setMappingStatus("error", "Save failed");
-                return;
-            }
-
-            const data = await response.json();
-            syncConfigData.field_mapping = data?.config?.field_mapping || syncConfigData.field_mapping;
-            populateMappingInputs();
-            setMappingStatus("success", "Mapping saved");
-        } catch (err) {
-            console.error("Save mapping failed", err);
-            setMappingStatus("error", "Save failed");
-        }
-    };
-
-    const handleResetMapping = () => {
-        Object.entries(mappingInputs).forEach(([key, input]) => {
-            if (!input) return;
-            const defaults = (window.DEFAULT_FIELD_MAPPING && window.DEFAULT_FIELD_MAPPING[key]) || [];
-            input.value = defaults.join(", ");
-        });
-        setMappingStatus("info", "Defaults restored (not yet saved)");
-    };
-
-    populateMappingInputs();
-
     if (syncConfigData?.last_sync?.timestamp) {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync.timestamp}`);
     }
@@ -762,6 +676,4 @@ document.addEventListener("DOMContentLoaded", function () {
     dryRunButton?.addEventListener("click", () => handleSyncRequest(true));
     importButton?.addEventListener("click", () => handleSyncRequest(false));
     saveSettingsButton?.addEventListener("click", handleSaveSettings);
-    saveMappingButton?.addEventListener("click", handleSaveMapping);
-    resetMappingButton?.addEventListener("click", handleResetMapping);
 });

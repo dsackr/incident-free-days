@@ -476,38 +476,6 @@
                 <div class="config-card">
                     <div class="config-card-header">
                         <div>
-                            <h3>Product → pillar key</h3>
-                            <p class="helper-text">View how products are grouped under each pillar from the uploaded mapping.</p>
-                        </div>
-                    </div>
-
-                    {% if products_by_pillar and products_by_pillar.__all__|length > 0 %}
-                        <div class="pillar-map">
-                            <ul class="pillar-map-list">
-                                {% for pillar, products in products_by_pillar.items() if pillar != '__all__' %}
-                                    <li>
-                                        <strong>{{ pillar or 'Unmapped' }}</strong>
-                                        {% if products %}
-                                            <ul>
-                                                {% for product in products %}
-                                                    <li>{{ product }}</li>
-                                                {% endfor %}
-                                            </ul>
-                                        {% else %}
-                                            <p class="helper-text small">No products mapped.</p>
-                                        {% endif %}
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% else %}
-                        <p class="helper-text">Upload a product → pillar key to see mapping details.</p>
-                    {% endif %}
-                </div>
-
-                <div class="config-card">
-                    <div class="config-card-header">
-                        <div>
                             <h3>Dry run &amp; import</h3>
                             <p class="helper-text">Preview mapped payloads, then import all incidents in the selected window.</p>
                         </div>
@@ -558,111 +526,68 @@
                         </table>
                     </div>
                 </div>
-            </div>
 
-            <div class="upload-panel">
-                {% if key_missing %}
-                <div class="notice error">Upload the product → pillar key before importing CSV data.</div>
-                {% endif %}
-                {% if key_uploaded %}
-                <div class="notice success">Product → pillar key saved successfully.</div>
-                {% endif %}
-                {% if key_error %}
-                <div class="notice error">
-                    {% if key_error == 'missing' %}
-                        Please choose a JSON file to upload.
-                    {% elif key_error == 'decode' %}
-                        Could not read the file. Ensure it is UTF-8 encoded.
-                    {% elif key_error == 'invalid' %}
-                        The uploaded file is not valid JSON.
-                    {% elif key_error == 'format' %}
-                        The JSON must be an object mapping product names to pillars.
-                    {% else %}
-                        Unable to process the uploaded key file.
-                    {% endif %}
-                </div>
-                {% endif %}
-
-                <div>
-                    <h3>Bulk update via CSV</h3>
-                    <p class="helper-text">Upload output from incident.io. Mapped columns: ID → Incident Number, Reported at → Date, Severity → Severity, Product → Product. Pillars are always populated using the uploaded product → pillar key.</p>
-                    <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
-                        <input type="file" name="file" accept=".csv" required {% if not key_present %}disabled{% endif %} />
-                        <label class="helper-text">
-                            Import mode
-                            <select name="mode" {% if not key_present %}disabled{% endif %}>
-                                <option value="update" selected>Update (default) — add only new incidents, keep existing</option>
-                                <option value="replace">Replace — clear all incidents and rebuild from this CSV</option>
-                            </select>
-                        </label>
-                        <button type="submit" {% if not key_present %}disabled{% endif %}>Upload CSV</button>
-                    </form>
-                </div>
-
-                <div>
-                    <h3>Upload product → pillar key</h3>
-                    <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}. Uploading a new key will replace the previous mapping and update all incidents to use the latest pillars.</p>
-                    <form method="POST" action="{{ url_for('upload_key_file') }}" enctype="multipart/form-data">
-                        <input type="file" name="key_file" accept=".json" required />
-                        <button type="submit">Upload Key</button>
-                    </form>
-                </div>
-            </div>
-
-            <div class="config-card mapping-card">
-                <div class="config-card-header">
-                    <div>
-                        <h3>Field mapping from incident.io</h3>
-                        <p class="helper-text">Tell the sync which incident.io fields should populate each column before running dry runs or imports.</p>
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
+                            <h3>Product → pillar key</h3>
+                            <p class="helper-text">View how products are grouped under each pillar from the uploaded mapping.</p>
+                        </div>
                     </div>
-                    <div class="status-pills" id="mapping-status-pill"></div>
-                </div>
 
-                <div class="form-row two-column">
-                    <label>
-                        <span>Incident number fields</span>
-                        <input type="text" id="map-inc-number" placeholder="incident_number, id" />
-                        <span class="helper-text small">Order matters. First matching field wins.</span>
-                    </label>
-                    <label>
-                        <span>Severity fields</span>
-                        <input type="text" id="map-severity" placeholder="severity, severity_level" />
-                    </label>
-                </div>
+                    {% if key_missing %}
+                    <div class="notice error">Upload the product → pillar key before importing data.</div>
+                    {% endif %}
+                    {% if key_uploaded %}
+                    <div class="notice success">Product → pillar key saved successfully.</div>
+                    {% endif %}
+                    {% if key_error %}
+                    <div class="notice error">
+                        {% if key_error == 'missing' %}
+                            Please choose a JSON file to upload.
+                        {% elif key_error == 'decode' %}
+                            Could not read the file. Ensure it is UTF-8 encoded.
+                        {% elif key_error == 'invalid' %}
+                            The uploaded file is not valid JSON.
+                        {% elif key_error == 'format' %}
+                            The JSON must be an object mapping product names to pillars.
+                        {% else %}
+                            Unable to process the uploaded key file.
+                        {% endif %}
+                    </div>
+                    {% endif %}
 
-                <div class="form-row two-column">
-                    <label>
-                        <span>Event type fields</span>
-                        <input type="text" id="map-event-type" placeholder="incident_type, type" />
-                    </label>
-                    <label>
-                        <span>Duration fields</span>
-                        <input type="text" id="map-duration" placeholder="duration_seconds, duration" />
-                    </label>
-                </div>
+                    <div class="form-row">
+                        <h4>Upload product → pillar key</h4>
+                        <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}. Uploading a new key will replace the previous mapping and update all incidents to use the latest pillars.</p>
+                        <form method="POST" action="{{ url_for('upload_key_file') }}" enctype="multipart/form-data">
+                            <input type="file" name="key_file" accept=".json" required />
+                            <button type="submit">Upload Key</button>
+                        </form>
+                    </div>
 
-                <div class="form-row two-column">
-                    <label>
-                        <span>Reported at fields</span>
-                        <input type="text" id="map-reported-at" placeholder="started_at, created_at" />
-                    </label>
-                    <label>
-                        <span>Closed at fields</span>
-                        <input type="text" id="map-closed-at" placeholder="resolved_at, closed_at" />
-                    </label>
-                </div>
-
-                <div class="form-row">
-                    <label>
-                        <span>Product / service fields</span>
-                        <input type="text" id="map-products" placeholder="products, services, components" />
-                        <span class="helper-text small">Comma-separated; lists, objects, or strings are supported.</span>
-                    </label>
-                </div>
-
-                <div class="button-row">
-                    <button type="button" class="secondary-button" id="reset-field-mapping">Reset to defaults</button>
-                    <button type="button" class="primary-button" id="save-field-mapping">Save field mapping</button>
+                    {% if products_by_pillar and products_by_pillar.__all__|length > 0 %}
+                        <div class="pillar-map">
+                            <ul class="pillar-map-list">
+                                {% for pillar, products in products_by_pillar.items() if pillar != '__all__' %}
+                                    <li>
+                                        <strong>{{ pillar or 'Unmapped' }}</strong>
+                                        {% if products %}
+                                            <ul>
+                                                {% for product in products %}
+                                                    <li>{{ product }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="helper-text small">No products mapped.</p>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% else %}
+                        <p class="helper-text">Upload a product → pillar key to see mapping details.</p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -685,9 +610,6 @@
     <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
     <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
     <script id="sync-config-data" type="application/json">{{ sync_config|tojson }}</script>
-    <script>
-        window.DEFAULT_FIELD_MAPPING = {{ default_field_mapping|tojson }};
-    </script>
 
     <footer class="site-footer" aria-label="Footer">
         <p class="footer-text">You are viewing this page from IP address: <strong>{{ client_ip }}</strong></p>
