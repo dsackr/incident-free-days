@@ -23,12 +23,18 @@ def _build_headers(token: str) -> Dict[str, str]:
 
 
 def _extract_next_cursor(payload: Dict[str, Any]) -> Optional[str]:
-    pagination = payload.get("pagination") or payload.get("page") or {}
-    next_cursor = pagination.get("next_cursor") or pagination.get("next")
-    if next_cursor:
-        return str(next_cursor)
+    pagination = (
+        payload.get("pagination")
+        or payload.get("page")
+        or payload.get("pagination_meta")
+        or {}
+    )
+    for key in ("next_cursor", "next", "after"):
+        next_cursor = pagination.get(key)
+        if next_cursor:
+            return str(next_cursor)
 
-    return payload.get("next_cursor") or payload.get("next")
+    return payload.get("next_cursor") or payload.get("next") or payload.get("after")
 
 
 def _coerce_incidents(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -106,6 +112,11 @@ def fetch_incidents(
         if not next_cursor:
             break
 
-        params = {"page_size": page_size, "page_after": next_cursor}
+        params = {
+            "page_size": page_size,
+            # Support both documented "page_after" and observed "after" pagination cursors
+            "page_after": next_cursor,
+            "after": next_cursor,
+        }
 
     return incidents

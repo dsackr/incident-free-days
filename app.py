@@ -484,8 +484,14 @@ def sync_incidents_from_api(
     other_events_file=OTHER_EVENTS_FILE,
     field_mapping=None,
 ):
-    start_date_obj = parse_date(start_date) if start_date else None
-    end_date_obj = parse_date(end_date) if end_date else None
+    config_defaults = load_sync_config()
+    last_sync_timestamp = (config_defaults.get("last_sync") or {}).get("timestamp")
+
+    effective_start = start_date or config_defaults.get("start_date") or last_sync_timestamp
+    effective_end = end_date or config_defaults.get("end_date")
+
+    start_date_obj = parse_date(effective_start) if effective_start else None
+    end_date_obj = parse_date(effective_end) if effective_end else None
     mapping = load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
 
