@@ -77,8 +77,8 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    The app will now start on boot and can be managed via `systemctl`.
 
 3. **Report an incident**
-  - Open the app in a browser and switch to the **Configuration** tab.
-  - Use the **Manual incident entry** section to provide an incident number, date, severity, and impacted pillar, then submit.
+- Open the app in a browser and switch to the **Configuration** tab.
+- Use the **Field mapping** section to control how incident.io fields populate the calendar columns before running a sync.
 
 ## Data storage
 - Incidents are stored in `incidents.json` in the project root. The file is created on first save.
@@ -96,9 +96,10 @@ The app can pull incidents directly from incident.io so you do not need to manua
 ### Via the Configuration tab
 1. Open the app and go to **Configuration**.
 2. Enter your `INCIDENT_IO_API_TOKEN` and optional base URL override. Tokens are stored locally in `sync_config.json` and are never displayed back in the UI.
-3. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
-4. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
-5. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
+3. Map incident.io fields (incident number, timestamps, severity, duration, products/services) to the columns the calendar expects. Comma-separated values are checked in order.
+4. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
+5. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
+6. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
 
 ### Via the CLI or API
 1. Export your incident.io API token to the environment:

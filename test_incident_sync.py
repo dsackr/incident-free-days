@@ -44,6 +44,36 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["reported_at"], "2024-05-01T05:00:00")
         self.assertEqual(payload["closed_at"], "2024-05-01T06:00:00")
 
+    def test_custom_field_mapping_is_respected(self):
+        mapping = {"Search": "Platform"}
+        api_incident = {
+            "number": "INC-400",
+            "severity_label": {"label": "Sev1"},
+            "type_info": {"label": "Operational Event"},
+            "created": "2024-01-01T00:00:00Z",
+            "completed": "2024-01-01T01:00:00Z",
+            "services": [{"full_name": "Search"}],
+        }
+
+        field_mapping = {
+            "inc_number": ["number"],
+            "severity": ["severity_label"],
+            "event_type": ["type_info"],
+            "reported_at": ["created"],
+            "closed_at": ["completed"],
+            "duration_seconds": ["duration_seconds"],
+            "products": ["services"],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident, mapping=mapping, field_mapping=field_mapping)
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["inc_number"], "INC-400")
+        self.assertEqual(payload["event_type"], "Operational Event")
+        self.assertEqual(payload["product"], "Search")
+        self.assertEqual(payload["duration_seconds"], 3600)
+        self.assertEqual(payload["reported_at"], "2023-12-31T19:00:00")
+
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):
         api_incident = {

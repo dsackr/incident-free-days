@@ -577,73 +577,62 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ url_for('add_incident') }}" class="incident-form legacy-form">
-                <h3>Manual incident entry</h3>
-                <div class="form-row">
-                    <label for="inc_number">INC number</label>
-                    <input type="text" id="inc_number" name="inc_number"
-                           placeholder="INC-001" required />
-                </div>
-
-                <div class="form-row">
-                    <label for="date">Date</label>
-                    <!-- HTML date input (YYYY-MM-DD); backend also accepts MM/DD/YYYY -->
-                    <input type="date" id="date" name="date" required />
+            <div class="config-card mapping-card">
+                <div class="config-card-header">
+                    <div>
+                        <h3>Field mapping from incident.io</h3>
+                        <p class="helper-text">Tell the sync which incident.io fields should populate each column before running dry runs or imports.</p>
+                    </div>
+                    <div class="status-pills" id="mapping-status-pill"></div>
                 </div>
 
                 <div class="form-row two-column">
-                    <label for="start_time">Reported at (time)</label>
-                    <input type="time" id="start_time" name="start_time" />
-
-                    <label for="closed_time">Closed at (time)</label>
-                    <input type="time" id="closed_time" name="closed_time" />
+                    <label>
+                        <span>Incident number fields</span>
+                        <input type="text" id="map-inc-number" placeholder="incident_number, id" />
+                        <span class="helper-text small">Order matters. First matching field wins.</span>
+                    </label>
+                    <label>
+                        <span>Severity fields</span>
+                        <input type="text" id="map-severity" placeholder="severity, severity_level" />
+                    </label>
                 </div>
 
                 <div class="form-row two-column">
-                    <label for="closed_date">Closed at (date)</label>
-                    <input type="date" id="closed_date" name="closed_date" />
+                    <label>
+                        <span>Event type fields</span>
+                        <input type="text" id="map-event-type" placeholder="incident_type, type" />
+                    </label>
+                    <label>
+                        <span>Duration fields</span>
+                        <input type="text" id="map-duration" placeholder="duration_seconds, duration" />
+                    </label>
+                </div>
 
-                    <label for="duration_seconds">Duration (seconds)</label>
-                    <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        id="duration_seconds"
-                        name="duration_seconds"
-                        placeholder="0"
-                    />
+                <div class="form-row two-column">
+                    <label>
+                        <span>Reported at fields</span>
+                        <input type="text" id="map-reported-at" placeholder="started_at, created_at" />
+                    </label>
+                    <label>
+                        <span>Closed at fields</span>
+                        <input type="text" id="map-closed-at" placeholder="resolved_at, closed_at" />
+                    </label>
                 </div>
 
                 <div class="form-row">
-                    <label for="severity">Severity</label>
-                    <select id="severity" name="severity" required>
-                        <option value="">Select</option>
-                        <option value="1">1 - Critical</option>
-                        <option value="2">2 - High</option>
-                        <option value="3">3 - Medium</option>
-                        <option value="6">6 - Low</option>
-                    </select>
+                    <label>
+                        <span>Product / service fields</span>
+                        <input type="text" id="map-products" placeholder="products, services, components" />
+                        <span class="helper-text small">Comma-separated; lists, objects, or strings are supported.</span>
+                    </label>
                 </div>
 
-                <div class="form-row">
-                    <label for="event_type">Event Type</label>
-                    <select id="event_type" name="event_type">
-                        <option value="Operational Incident">Operational Incident</option>
-                        <option value="Operational Event">Operational Event</option>
-                        <option value="Deployment Event">Deployment Event</option>
-                        <option value="War Room">War Room</option>
-                    </select>
+                <div class="button-row">
+                    <button type="button" class="secondary-button" id="reset-field-mapping">Reset to defaults</button>
+                    <button type="button" class="primary-button" id="save-field-mapping">Save field mapping</button>
                 </div>
-
-                <div class="form-row">
-                    <label for="product">Product</label>
-                    <input type="text" id="product" name="product" placeholder="Product name" />
-                </div>
-
-                <div class="form-row">
-                    <button type="submit">Save Incident</button>
-                </div>
-            </form>
+            </div>
 
         </div>
     </div>
@@ -664,6 +653,9 @@
     <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
     <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
     <script id="sync-config-data" type="application/json">{{ sync_config|tojson }}</script>
+    <script>
+        window.DEFAULT_FIELD_MAPPING = {{ default_field_mapping|tojson }};
+    </script>
 
     <footer class="site-footer" aria-label="Footer">
         <p class="footer-text">You are viewing this page from IP address: <strong>{{ client_ip }}</strong></p>

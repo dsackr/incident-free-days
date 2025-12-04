@@ -20,6 +20,16 @@ PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 DEFAULT_YEAR = 2025
 
+DEFAULT_FIELD_MAPPING = {
+    "inc_number": ["incident_number", "incident_id", "id", "reference", "name"],
+    "severity": ["severity", "severity_level"],
+    "event_type": ["incident_type", "type"],
+    "reported_at": ["started_at", "started", "created_at", "created", "detected_at"],
+    "closed_at": ["resolved_at", "closed_at", "ended_at", "completed_at"],
+    "duration_seconds": ["duration_seconds", "duration"],
+    "products": ["products", "services", "service", "teams", "impacted_services", "components"],
+}
+
 
 def load_events(path):
     if not os.path.exists(path):
@@ -59,24 +69,48 @@ def load_product_key():
     return {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
 
 
+def normalize_field_mapping(raw_mapping):
+    raw_mapping = raw_mapping or {}
+    normalized = {}
+
+    for field, defaults in DEFAULT_FIELD_MAPPING.items():
+        value = raw_mapping.get(field)
+        entries = []
+
+        if isinstance(value, str):
+            entries = [item.strip() for item in value.split(",") if item.strip()]
+        elif isinstance(value, list):
+            for item in value:
+                cleaned = str(item).strip()
+                if cleaned:
+                    entries.append(cleaned)
+
+        normalized[field] = entries or list(defaults)
+
+    return normalized
+
+
 def load_sync_config():
     if not os.path.exists(SYNC_CONFIG_FILE):
-        return {"cadence": "daily"}
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
 
     try:
         with open(SYNC_CONFIG_FILE, "r") as f:
             data = json.load(f)
     except (json.JSONDecodeError, OSError):
-        return {"cadence": "daily"}
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
 
     if not isinstance(data, dict):
-        return {"cadence": "daily"}
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
 
     data.setdefault("cadence", "daily")
+    data.setdefault("field_mapping", DEFAULT_FIELD_MAPPING)
+    data["field_mapping"] = normalize_field_mapping(data.get("field_mapping"))
     return data
 
 
 def save_sync_config(config):
+    normalized_mapping = normalize_field_mapping(config.get("field_mapping"))
     payload = {
         "cadence": config.get("cadence", "daily"),
         "base_url": config.get("base_url") or "",
@@ -84,6 +118,7 @@ def save_sync_config(config):
         "start_date": config.get("start_date") or "",
         "end_date": config.get("end_date") or "",
         "last_sync": config.get("last_sync") or {},
+        "field_mapping": normalized_mapping,
     }
 
     try:
@@ -314,8 +349,9 @@ def get_client_ip(req):
     return (req.remote_addr or "Unknown").strip()
 
 
-def _extract_product_values(api_incident):
+def _extract_product_values(api_incident, product_keys=None):
     products = []
+    candidate_keys = product_keys or DEFAULT_FIELD_MAPPING["products"]
 
     def add_value(value):
         if value is None:
@@ -339,14 +375,7 @@ def _extract_product_values(api_incident):
             for item in value:
                 add_value(item)
 
-    for key in (
-        "products",
-        "services",
-        "service",
-        "teams",
-        "impacted_services",
-        "components",
-    ):
+    for key in candidate_keys:
         add_value(api_incident.get(key))
 
     if not products:
@@ -362,17 +391,22 @@ def _extract_product_values(api_incident):
     return deduped or [""]
 
 
-def normalize_incident_payloads(api_incident, mapping=None):
-    mapping = mapping if mapping is not None else load_product_key()
-
-    inc_number = None
-    for key in ("incident_number", "incident_id", "id", "reference", "name"):
+def _extract_first_value(api_incident, keys):
+    for key in keys:
         value = api_incident.get(key)
-        if value:
-            inc_number = str(value).strip()
-            break
+        if value is not None:
+            return value
+    return None
 
-    severity_field = api_incident.get("severity") or api_incident.get("severity_level")
+
+def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
+    mapping = mapping if mapping is not None else load_product_key()
+    field_mapping = normalize_field_mapping(field_mapping)
+
+    inc_number_raw = _extract_first_value(api_incident, field_mapping["inc_number"])
+    inc_number = str(inc_number_raw).strip() if inc_number_raw else None
+
+    severity_field = _extract_first_value(api_incident, field_mapping["severity"])
     if isinstance(severity_field, dict):
         severity = (
             severity_field.get("name")
@@ -383,30 +417,19 @@ def normalize_incident_payloads(api_incident, mapping=None):
     else:
         severity = severity_field or ""
 
-    event_type_field = api_incident.get("incident_type") or api_incident.get("type")
+    event_type_field = _extract_first_value(api_incident, field_mapping["event_type"])
     if isinstance(event_type_field, dict):
         event_type = event_type_field.get("name") or event_type_field.get("label") or "Operational Incident"
     else:
         event_type = (event_type_field or "Operational Incident").strip() or "Operational Incident"
 
-    reported_raw = (
-        api_incident.get("started_at")
-        or api_incident.get("started")
-        or api_incident.get("created_at")
-        or api_incident.get("created")
-        or api_incident.get("detected_at")
-    )
-    closed_raw = (
-        api_incident.get("resolved_at")
-        or api_incident.get("closed_at")
-        or api_incident.get("ended_at")
-        or api_incident.get("completed_at")
-    )
+    reported_raw = _extract_first_value(api_incident, field_mapping["reported_at"])
+    closed_raw = _extract_first_value(api_incident, field_mapping["closed_at"])
 
     reported_dt = shift_utc_to_est(parse_datetime(reported_raw))
     closed_dt = shift_utc_to_est(parse_datetime(closed_raw))
 
-    raw_duration = api_incident.get("duration_seconds") or api_incident.get("duration") or 0
+    raw_duration = _extract_first_value(api_incident, field_mapping["duration_seconds"]) or 0
     try:
         duration_seconds = int(raw_duration) if raw_duration is not None else 0
     except (TypeError, ValueError):
@@ -419,7 +442,7 @@ def normalize_incident_payloads(api_incident, mapping=None):
     if not inc_number or reported_dt is None:
         return []
 
-    product_values = _extract_product_values(api_incident)
+    product_values = _extract_product_values(api_incident, field_mapping["products"])
     payloads = []
 
     for product in product_values:
@@ -449,10 +472,12 @@ def sync_incidents_from_api(
     include_samples=False,
     incidents_file=DATA_FILE,
     other_events_file=OTHER_EVENTS_FILE,
+    field_mapping=None,
 ):
     start_date_obj = parse_date(start_date) if start_date else None
     end_date_obj = parse_date(end_date) if end_date else None
     mapping = load_product_key()
+    field_mapping = normalize_field_mapping(field_mapping)
 
     incidents = load_events(incidents_file)
     other_events = load_events(other_events_file)
@@ -491,7 +516,7 @@ def sync_incidents_from_api(
     other_seen = set(existing_other)
 
     for api_incident in fetched:
-        normalized = normalize_incident_payloads(api_incident, mapping=mapping)
+        normalized = normalize_incident_payloads(api_incident, mapping=mapping, field_mapping=field_mapping)
 
         filtered_payloads = []
         for payload in normalized:
@@ -594,6 +619,7 @@ def index():
         "end_date": sync_config_raw.get("end_date", ""),
         "token_saved": bool(sync_config_raw.get("token")),
         "last_sync": sync_config_raw.get("last_sync") or {},
+        "field_mapping": sync_config_raw.get("field_mapping", DEFAULT_FIELD_MAPPING),
     }
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
 
@@ -1029,6 +1055,7 @@ def index():
         client_ip=client_ip,
         sync_config=sync_config,
         env_token_available=env_token_available,
+        default_field_mapping=DEFAULT_FIELD_MAPPING,
     )
 
 
@@ -1444,12 +1471,14 @@ def sync_incidents_endpoint():
     base_url = payload.get("base_url") or request.args.get("base_url")
     token = payload.get("token") or request.args.get("token")
     include_samples = payload.get("include_samples", dry_run)
+    field_mapping = payload.get("field_mapping") or {}
 
     config = load_sync_config()
     effective_token = token or config.get("token")
     effective_base_url = base_url or config.get("base_url") or None
     effective_start_date = start_date or config.get("start_date") or None
     effective_end_date = end_date or config.get("end_date") or None
+    effective_field_mapping = field_mapping or config.get("field_mapping")
 
     if payload.get("persist_settings"):
         config.update(
@@ -1459,6 +1488,7 @@ def sync_incidents_endpoint():
                 "start_date": start_date or config.get("start_date") or "",
                 "end_date": end_date or config.get("end_date") or "",
                 "cadence": payload.get("cadence") or config.get("cadence", "daily"),
+                "field_mapping": effective_field_mapping,
             }
         )
         save_sync_config(config)
@@ -1470,6 +1500,7 @@ def sync_incidents_endpoint():
         token=effective_token,
         base_url=effective_base_url,
         include_samples=include_samples,
+        field_mapping=effective_field_mapping,
     )
     status_code = 200 if not result.get("error") else 500
     return jsonify(result), status_code
@@ -1480,6 +1511,8 @@ def update_sync_config():
     payload = request.get_json(silent=True) or {}
     config = load_sync_config()
 
+    updated_mapping = normalize_field_mapping(payload.get("field_mapping") or config.get("field_mapping"))
+
     updated = {
         "cadence": payload.get("cadence") or config.get("cadence", "daily"),
         "base_url": payload.get("base_url") or "",
@@ -1487,6 +1520,7 @@ def update_sync_config():
         "start_date": payload.get("start_date") or "",
         "end_date": payload.get("end_date") or "",
         "last_sync": config.get("last_sync") or {},
+        "field_mapping": updated_mapping,
     }
 
     save_sync_config(updated)
