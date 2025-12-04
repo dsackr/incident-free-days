@@ -63,6 +63,34 @@ document.addEventListener("DOMContentLoaded", function () {
     const modalClose = document.getElementById("incident-modal-close");
     const modalBackdrop = document.getElementById("incident-modal-backdrop");
 
+    const formatDateTime = (value) => {
+        if (!value) return null;
+
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        });
+
+        const parts = formatter.formatToParts(parsed).reduce((acc, part) => {
+            acc[part.type] = part.value;
+            return acc;
+        }, {});
+
+        if (parts.month && parts.day && parts.year && parts.hour && parts.minute) {
+            return `${parts.month}/${parts.day}/${parts.year} ${parts.hour}:${parts.minute}`;
+        }
+
+        return formatter.format(parsed);
+    };
+
     const renderModal = (kind, dateStr, incidents) => {
         modalDateEl.textContent = `${kind === "incidents" ? "Incidents" : "Events"} on ${dateStr}`;
 
@@ -83,20 +111,30 @@ document.addEventListener("DOMContentLoaded", function () {
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
                 const extraMeta = [];
-                if (inc.reported_at) {
-                    extraMeta.push(`Reported: ${inc.reported_at}`);
+                const reportedFormatted = formatDateTime(inc.reported_at);
+                const closedFormatted = formatDateTime(inc.closed_at);
+
+                if (reportedFormatted) {
+                    extraMeta.push(`Reported: ${reportedFormatted}`);
                 }
-                if (inc.closed_at) {
-                    extraMeta.push(`Closed: ${inc.closed_at}`);
+                if (closedFormatted) {
+                    extraMeta.push(`Closed: ${closedFormatted}`);
                 }
                 if (inc.duration_seconds) {
                     extraMeta.push(`Duration: ${inc.duration_seconds} sec`);
                 }
                 const extraMetaText = extraMeta.length ? ` · ${extraMeta.join(" · ")}` : "";
                 const eventType = inc.event_type ? ` · Type: ${inc.event_type}` : "";
+                const metaParts = [];
+                if (kind === "incidents") {
+                    metaParts.push(`Severity: ${inc.severity || "N/A"}`);
+                }
+                metaParts.push(`Pillar: ${inc.pillar || "N/A"}`);
+                metaParts.push(`Product: ${inc.product || "N/A"}`);
+                const metaText = metaParts.join(" · ");
                 row.innerHTML = `
                     <p class="incident-title">${incidentTitle()}</p>
-                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}${eventType}${extraMetaText}</p>
+                    <p class="incident-meta">${metaText}${eventType}${extraMetaText}</p>
                 `;
                 modalBody.appendChild(row);
             });
@@ -472,4 +510,170 @@ document.addEventListener("DOMContentLoaded", function () {
     exportButtons.forEach((btn) => {
         btn.addEventListener("click", () => exportCalendar(btn));
     });
+
+    // Sync configuration helpers
+    const apiTokenInput = document.getElementById("sync-api-token");
+    const baseUrlInput = document.getElementById("sync-base-url");
+    const cadenceSelect = document.getElementById("sync-cadence");
+    const startDateInput = document.getElementById("sync-start-date");
+    const endDateInput = document.getElementById("sync-end-date");
+    const saveSettingsButton = document.getElementById("save-sync-settings");
+    const dryRunButton = document.getElementById("sync-dry-run");
+    const importButton = document.getElementById("sync-import");
+    const resultsEl = document.getElementById("sync-results");
+    const previewBody = document.getElementById("mapping-preview-body");
+    const statusPillContainer = document.getElementById("sync-status-pill");
+    const syncConfigData = readJsonFromScript("sync-config-data") || {};
+
+    const setStatusPill = (status, text) => {
+        if (!statusPillContainer) return;
+        statusPillContainer.innerHTML = "";
+        if (!status || !text) return;
+
+        const pill = document.createElement("span");
+        pill.className = `status-pill ${status}`;
+        pill.textContent = text;
+        statusPillContainer.appendChild(pill);
+    };
+
+    const renderSamples = (samples) => {
+        if (!previewBody) return;
+        previewBody.innerHTML = "";
+
+        if (!samples || samples.length === 0) {
+            const row = document.createElement("tr");
+            row.className = "empty-row";
+            const cell = document.createElement("td");
+            cell.colSpan = 8;
+            cell.textContent = "Run a dry run to see mapping results.";
+            row.appendChild(cell);
+            previewBody.appendChild(row);
+            return;
+        }
+
+        samples.forEach((sample) => {
+            const normalized = sample.normalized || {};
+            const row = document.createElement("tr");
+            const columns = [
+                normalized.inc_number || sample?.source?.id || "",
+                normalized.product || "",
+                normalized.pillar || "",
+                normalized.severity || "",
+                normalized.reported_at || "",
+                normalized.closed_at || "",
+                normalized.duration_seconds ?? "",
+                normalized.event_type || "",
+            ];
+
+            columns.forEach((value) => {
+                const cell = document.createElement("td");
+                cell.textContent = value === null || value === undefined ? "" : value;
+                row.appendChild(cell);
+            });
+
+            previewBody.appendChild(row);
+        });
+    };
+
+    const renderResults = (result) => {
+        if (!resultsEl) return;
+        if (!result) {
+            resultsEl.innerHTML = "";
+            return;
+        }
+
+        if (result.error) {
+            resultsEl.innerHTML = `<div class="notice error">${result.error}</div>`;
+            setStatusPill("error", "Sync failed");
+            return;
+        }
+
+        const summary = document.createElement("div");
+        summary.className = "notice success";
+        summary.innerHTML = `Fetched ${result.fetched} • Added incidents: ${result.added_incidents} • Added other events: ${result.added_other_events} ${result.dry_run ? "(dry run)" : ""}`;
+        resultsEl.innerHTML = "";
+        resultsEl.appendChild(summary);
+
+        setStatusPill("success", result.dry_run ? "Dry run complete" : "Import complete");
+    };
+
+    const gatherSyncPayload = (dryRun) => {
+        const tokenValue = apiTokenInput?.value?.trim();
+        return {
+            dry_run: !!dryRun,
+            token: tokenValue || undefined,
+            base_url: baseUrlInput?.value?.trim() || undefined,
+            start_date: startDateInput?.value || undefined,
+            end_date: endDateInput?.value || undefined,
+            include_samples: true,
+            persist_settings: true,
+            cadence: cadenceSelect?.value || "daily",
+        };
+    };
+
+    const handleSyncRequest = async (dryRun) => {
+        if (!dryRun && !confirm("Import incidents into the calendar?")) {
+            return;
+        }
+
+        renderResults(null);
+        setStatusPill("info", dryRun ? "Running dry run" : "Importing incidents");
+
+        try {
+            const response = await fetch("/sync/incidents", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(gatherSyncPayload(dryRun)),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                renderResults({ error: data?.error || "Sync failed" });
+                return;
+            }
+
+            renderResults(data);
+            renderSamples(data?.samples || []);
+        } catch (err) {
+            console.error("Sync failed", err);
+            renderResults({ error: "Unable to reach the sync endpoint." });
+        }
+    };
+
+    const handleSaveSettings = async () => {
+        setStatusPill("info", "Saving settings");
+        try {
+            const response = await fetch("/sync/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    token: apiTokenInput?.value?.trim() || undefined,
+                    base_url: baseUrlInput?.value?.trim() || undefined,
+                    cadence: cadenceSelect?.value || "daily",
+                    start_date: startDateInput?.value || undefined,
+                    end_date: endDateInput?.value || undefined,
+                }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                setStatusPill("error", "Save failed");
+                resultsEl.innerHTML = `<div class="notice error">${data?.error || "Could not save settings."}</div>`;
+                return;
+            }
+
+            setStatusPill("success", "Settings saved");
+        } catch (err) {
+            console.error("Save failed", err);
+            setStatusPill("error", "Save failed");
+        }
+    };
+
+    if (syncConfigData?.last_sync?.timestamp) {
+        setStatusPill("info", `Last sync ${syncConfigData.last_sync.timestamp}`);
+    }
+
+    dryRunButton?.addEventListener("click", () => handleSyncRequest(true));
+    importButton?.addEventListener("click", () => handleSyncRequest(false));
+    saveSettingsButton?.addEventListener("click", handleSaveSettings);
 });

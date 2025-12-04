@@ -77,8 +77,7 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
    The app will now start on boot and can be managed via `systemctl`.
 
 3. **Report an incident**
-   - Open the app in a browser and switch to the **Report Incident** tab.
-   - Provide an incident number, date, severity, and impacted pillar, then submit.
+- Open the app in a browser and switch to the **Configuration** tab.
 
 ## Data storage
 - Incidents are stored in `incidents.json` in the project root. The file is created on first save.
@@ -88,6 +87,37 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 ## Configuration
 - The default year rendered on the calendar is controlled by `DEFAULT_YEAR` in `app.py` (currently `2025`).
 - The calendar uses Sunday as the first day of the week (`calendar.Calendar(firstweekday=6)`).
+- To sync incidents from incident.io, set `INCIDENT_IO_API_TOKEN` (and optionally `INCIDENT_IO_BASE_URL` if you use a non-default host).
+
+## Syncing from incident.io
+The app can pull incidents directly from incident.io so you do not need to manually upload CSV files.
+
+### Via the Configuration tab
+1. Open the app and go to **Configuration**.
+2. Enter your `INCIDENT_IO_API_TOKEN` and optional base URL override. Tokens are stored locally in `sync_config.json` and are never displayed back in the UI.
+3. Pick a sync cadence (once an hour, once a day [default], or once a week) and optionally set a start/end date window.
+4. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
+5. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
+
+### Via the CLI or API
+1. Export your incident.io API token to the environment:
+   ```bash
+   export INCIDENT_IO_API_TOKEN="<token>"
+   # Optional: override the API host
+   # export INCIDENT_IO_BASE_URL="https://eu.api.incident.io"
+   ```
+
+2. Run a dry run from the feature branch to verify parsing and mapping without writing to disk:
+   ```bash
+   python app.py --sync-incidents --dry-run
+   ```
+
+3. Sync data to `incidents.json`/`others.json` once the output looks correct:
+   ```bash
+   python app.py --sync-incidents
+   ```
+
+You can also trigger the sync over HTTP using `GET /sync/incidents?dry_run=1` (dry run) or `POST /sync/incidents` with a JSON payload (token, optional date range) to persist results.
 
 ## Repository structure
 - `app.py` — Flask application entrypoint and routing.
@@ -96,9 +126,8 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 - `static/tabs.js` — Simple tab switcher for the UI and HTML-to-image export logic.
 
 ## Importing data and pillar key mapping
-- CSV uploads require a product → pillar key JSON file to be present in the app directory. Upload the key first using the **Upload product → pillar key** form; the key is saved alongside `incidents.json`.
-- When a CSV is imported, pillars are populated from the uploaded key using the product name. The pillar values in the CSV are ignored.
-- Duplicate incident numbers are skipped when adding incidents manually or via CSV import.
+- Upload a product → pillar key JSON file using the **Upload product → pillar key** form; the key is saved alongside `incidents.json`.
+- Duplicate incident numbers are skipped when adding incidents via sync.
 
 ## Exporting the calendar to an image
 - The calendar tab includes an **Export as Image** button that captures the visible calendar into a PNG.

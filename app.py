@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, redirect, send_file, url_for
+from flask import Flask, jsonify, render_template, request, redirect, send_file, url_for
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 import csv
 import calendar
 import json
@@ -9,13 +10,26 @@ import datetime as dt
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
+import incident_io_client
+
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "incidents.json")
 OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
+SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 DEFAULT_YEAR = 2025
+
+DEFAULT_FIELD_MAPPING = {
+    "inc_number": ["incident_number", "incident_id", "id", "reference", "name"],
+    "severity": ["severity", "severity_level"],
+    "event_type": ["incident_type", "type"],
+    "reported_at": ["started_at", "started", "created_at", "created", "detected_at"],
+    "closed_at": ["resolved_at", "closed_at", "ended_at", "completed_at"],
+    "duration_seconds": ["duration_seconds", "duration"],
+    "products": ["products", "services", "service", "teams", "impacted_services", "components"],
+}
 
 
 def load_events(path):
@@ -54,6 +68,66 @@ def load_product_key():
 
     # Normalize keys to strip whitespace for consistent lookups
     return {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
+
+
+def normalize_field_mapping(raw_mapping):
+    raw_mapping = raw_mapping or {}
+    normalized = {}
+
+    for field, defaults in DEFAULT_FIELD_MAPPING.items():
+        value = raw_mapping.get(field)
+        entries = []
+
+        if isinstance(value, str):
+            entries = [item.strip() for item in value.split(",") if item.strip()]
+        elif isinstance(value, list):
+            for item in value:
+                cleaned = str(item).strip()
+                if cleaned:
+                    entries.append(cleaned)
+
+        normalized[field] = entries or list(defaults)
+
+    return normalized
+
+
+def load_sync_config():
+    if not os.path.exists(SYNC_CONFIG_FILE):
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
+
+    try:
+        with open(SYNC_CONFIG_FILE, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
+
+    if not isinstance(data, dict):
+        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
+
+    data.setdefault("cadence", "daily")
+    data.setdefault("field_mapping", DEFAULT_FIELD_MAPPING)
+    data["field_mapping"] = normalize_field_mapping(data.get("field_mapping"))
+    return data
+
+
+def save_sync_config(config):
+    normalized_mapping = normalize_field_mapping(config.get("field_mapping"))
+    payload = {
+        "cadence": config.get("cadence", "daily"),
+        "base_url": config.get("base_url") or "",
+        "token": config.get("token") or "",
+        "start_date": config.get("start_date") or "",
+        "end_date": config.get("end_date") or "",
+        "last_sync": config.get("last_sync") or {},
+        "field_mapping": normalized_mapping,
+    }
+
+    try:
+        with open(SYNC_CONFIG_FILE, "w") as f:
+            json.dump(payload, f, indent=2)
+    except OSError:
+        # If we cannot persist, fall back to in-memory only behavior.
+        pass
 
 
 def parse_date(raw_value):
@@ -142,7 +216,10 @@ def shift_utc_to_est(dt):
     if dt is None:
         return None
 
-    return dt - timedelta(hours=5)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    return dt.astimezone(ZoneInfo("America/New_York"))
 
 
 def is_sev6(value):
@@ -276,6 +353,287 @@ def get_client_ip(req):
     return (req.remote_addr or "Unknown").strip()
 
 
+def _extract_product_values(api_incident, product_keys=None):
+    products = []
+    candidate_keys = product_keys or DEFAULT_FIELD_MAPPING["products"]
+
+    def add_value(value):
+        if value is None:
+            return
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if cleaned:
+                products.append(cleaned)
+            return
+
+        if isinstance(value, dict):
+            for key in ("name", "full_name", "slug", "id"):
+                candidate = value.get(key)
+                if candidate:
+                    products.append(str(candidate).strip())
+                    return
+            return
+
+        if isinstance(value, list):
+            for item in value:
+                add_value(item)
+
+    for key in candidate_keys:
+        add_value(api_incident.get(key))
+
+    if not products:
+        return [""]
+
+    deduped = []
+    seen = set()
+    for product in products:
+        if product and product not in seen:
+            seen.add(product)
+            deduped.append(product)
+
+    return deduped or [""]
+
+
+def _extract_first_value(api_incident, keys):
+    for key in keys:
+        value = api_incident.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_reported_date(api_incident):
+    for entry in api_incident.get("incident_timestamp_values") or []:
+        incident_timestamp = entry.get("incident_timestamp") or {}
+        timestamp_name = (incident_timestamp.get("name") or "").strip()
+        if timestamp_name.casefold() != "reported at".casefold():
+            continue
+
+        raw_value = (entry.get("value") or {}).get("value")
+        parsed = parse_datetime(raw_value)
+        if parsed:
+            reported = shift_utc_to_est(parsed)
+            return reported.date(), reported.isoformat(timespec="seconds")
+
+    created_raw = api_incident.get("created_at")
+    created_dt = parse_datetime(created_raw)
+    if created_dt:
+        reported = shift_utc_to_est(created_dt)
+        return reported.date(), reported.isoformat(timespec="seconds")
+
+    return None, None
+
+
+def _get_catalog_custom_values(api_incident, field_name, default="Unknown"):
+    target = (field_name or "").strip().casefold()
+    results = []
+
+    for entry in api_incident.get("custom_field_entries") or []:
+        custom_field = entry.get("custom_field") or {}
+        name = (custom_field.get("name") or "").strip().casefold()
+        if name != target:
+            continue
+
+        for value in entry.get("values") or []:
+            catalog_entry = value.get("value_catalog_entry") or {}
+            name_value = catalog_entry.get("name")
+            if name_value:
+                results.append(name_value)
+
+    if results:
+        return results
+
+    return [default]
+
+
+def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
+    mapping = mapping if mapping is not None else load_product_key()
+    field_mapping = normalize_field_mapping(field_mapping)
+
+    inc_number = (api_incident.get("reference") or api_incident.get("id") or "").strip()
+    if not inc_number:
+        return []
+
+    severity_raw = api_incident.get("severity")
+    if isinstance(severity_raw, dict):
+        severity = severity_raw.get("name") or severity_raw.get("label") or ""
+    else:
+        severity = str(severity_raw).strip() if severity_raw else ""
+
+    reported_date, reported_raw = _extract_reported_date(api_incident)
+    if not reported_date:
+        return []
+
+    products = _get_catalog_custom_values(api_incident, "Product", default="Unknown")
+    pillar_values = _get_catalog_custom_values(
+        api_incident, "Solution Pillar", default="Unknown"
+    )
+    pillar_hint = pillar_values[0] if pillar_values else "Unknown"
+
+    incident_type_raw = api_incident.get("incident_type") or api_incident.get("type")
+    if isinstance(incident_type_raw, dict):
+        event_type = incident_type_raw.get("name") or incident_type_raw.get("label") or ""
+    else:
+        event_type = str(incident_type_raw).strip() if incident_type_raw else ""
+
+    event_type = event_type or "Operational Incident"
+
+    payloads = []
+    for product in products:
+        resolved_pillar = resolve_pillar(
+            product,
+            provided_pillar=pillar_hint,
+            mapping=mapping,
+        )
+
+        payloads.append(
+            {
+                "inc_number": inc_number,
+                "date": reported_date.isoformat(),
+                "severity": severity,
+                "product": product or "Unknown",
+                "pillar": resolved_pillar or pillar_hint or "Unknown",
+                "reported_at": reported_raw
+                or f"{reported_date.isoformat()}T00:00:00",
+                "event_type": event_type,
+            }
+        )
+
+    return payloads
+
+
+def sync_incidents_from_api(
+    *,
+    dry_run=False,
+    start_date=None,
+    end_date=None,
+    token=None,
+    base_url=None,
+    include_samples=False,
+    incidents_file=DATA_FILE,
+    other_events_file=OTHER_EVENTS_FILE,
+    field_mapping=None,
+):
+    config_defaults = load_sync_config()
+    last_sync_timestamp = (config_defaults.get("last_sync") or {}).get("timestamp")
+
+    effective_start = start_date or config_defaults.get("start_date") or last_sync_timestamp
+    effective_end = end_date or config_defaults.get("end_date")
+
+    start_date_obj = parse_date(effective_start) if effective_start else None
+    end_date_obj = parse_date(effective_end) if effective_end else None
+    mapping = load_product_key()
+    field_mapping = normalize_field_mapping(field_mapping)
+
+    incidents = load_events(incidents_file)
+    other_events = load_events(other_events_file)
+
+    existing_incidents = {
+        (
+            inc.get("inc_number"),
+            (inc.get("product") or "").strip(),
+        )
+        for inc in incidents
+        if inc.get("inc_number")
+    }
+
+    existing_other = {
+        (
+            evt.get("inc_number"),
+            (evt.get("product") or "").strip(),
+        )
+        for evt in other_events
+        if evt.get("inc_number")
+    }
+
+    try:
+        fetched = incident_io_client.fetch_incidents(
+            base_url=base_url,
+            token=token,
+        )
+    except incident_io_client.IncidentAPIError as exc:
+        return {"error": str(exc), "added_incidents": 0, "added_other_events": 0, "dry_run": dry_run}
+
+    added_incidents = 0
+    added_other_events = 0
+    sample_payloads = []
+
+    incident_seen = set(existing_incidents)
+    other_seen = set(existing_other)
+
+    for api_incident in fetched:
+        normalized = normalize_incident_payloads(api_incident, mapping=mapping, field_mapping=field_mapping)
+
+        filtered_payloads = []
+        for payload in normalized:
+            reported_value = payload.get("reported_at")
+            reported_dt = parse_datetime(reported_value)
+            reported_date = reported_dt.date() if reported_dt else None
+
+            if start_date_obj and (not reported_date or reported_date < start_date_obj):
+                continue
+            if end_date_obj and (not reported_date or reported_date > end_date_obj):
+                continue
+
+            filtered_payloads.append(payload)
+
+        for payload in filtered_payloads:
+            lookup_key = (payload.get("inc_number"), (payload.get("product") or "").strip())
+            is_operational = payload.get("event_type") == "Operational Incident"
+
+            if is_operational:
+                if lookup_key in incident_seen:
+                    continue
+                added_incidents += 1
+                incident_seen.add(lookup_key)
+                if not dry_run:
+                    incidents.append(payload)
+            else:
+                if lookup_key in other_seen:
+                    continue
+                added_other_events += 1
+                other_seen.add(lookup_key)
+                if not dry_run:
+                    other_events.append(payload)
+
+            if include_samples and len(sample_payloads) < 10:
+                sample_payloads.append(
+                    {
+                        "source": {
+                            "id": api_incident.get("id") or api_incident.get("incident_id"),
+                            "name": api_incident.get("name"),
+                            "severity": api_incident.get("severity"),
+                            "started_at": payload.get("reported_at"),
+                            "resolved_at": payload.get("closed_at"),
+                        },
+                        "normalized": payload,
+                    }
+                )
+
+    if not dry_run:
+        save_events(incidents_file, incidents)
+        save_events(other_events_file, other_events)
+
+        config = load_sync_config()
+        config["last_sync"] = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "added_incidents": added_incidents,
+            "added_other_events": added_other_events,
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+        }
+        save_sync_config(config)
+
+    return {
+        "fetched": len(fetched),
+        "added_incidents": added_incidents,
+        "added_other_events": added_other_events,
+        "dry_run": dry_run,
+        "samples": sample_payloads if include_samples else [],
+    }
+
+
 @app.route("/", methods=["GET"])
 def index():
     year_str = request.args.get("year")
@@ -299,6 +657,18 @@ def index():
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
     active_tab = request.args.get("tab", "incidents")
+
+    sync_config_raw = load_sync_config()
+    sync_config = {
+        "cadence": sync_config_raw.get("cadence", "daily"),
+        "base_url": sync_config_raw.get("base_url", ""),
+        "start_date": sync_config_raw.get("start_date", ""),
+        "end_date": sync_config_raw.get("end_date", ""),
+        "token_saved": bool(sync_config_raw.get("token")),
+        "last_sync": sync_config_raw.get("last_sync") or {},
+        "field_mapping": sync_config_raw.get("field_mapping", DEFAULT_FIELD_MAPPING),
+    }
+    env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -730,6 +1100,8 @@ def index():
         key_error=key_error,
         active_tab=active_tab,
         client_ip=client_ip,
+        sync_config=sync_config,
+        env_token_available=env_token_available,
     )
 
 
@@ -1130,6 +1502,100 @@ def upload_key_file():
     return redirect(url_for("index", key_uploaded=1))
 
 
+@app.route("/sync/incidents", methods=["GET", "POST"])
+def sync_incidents_endpoint():
+    payload = request.get_json(silent=True) or {}
+
+    dry_run = (
+        request.args.get("dry_run") == "1"
+        or request.form.get("dry_run") == "1"
+        or payload.get("dry_run") in (True, "1", "true", "True")
+    )
+
+    start_date = payload.get("start_date") or request.args.get("start_date")
+    end_date = payload.get("end_date") or request.args.get("end_date")
+    base_url = payload.get("base_url") or request.args.get("base_url")
+    token = payload.get("token") or request.args.get("token")
+    include_samples = payload.get("include_samples", dry_run)
+    field_mapping = payload.get("field_mapping") or {}
+
+    config = load_sync_config()
+    effective_token = token or config.get("token")
+    effective_base_url = base_url or config.get("base_url") or None
+    effective_start_date = start_date or config.get("start_date") or None
+    effective_end_date = end_date or config.get("end_date") or None
+    effective_field_mapping = field_mapping or config.get("field_mapping")
+
+    if payload.get("persist_settings"):
+        config.update(
+            {
+                "token": token or config.get("token") or "",
+                "base_url": base_url or config.get("base_url") or "",
+                "start_date": start_date or config.get("start_date") or "",
+                "end_date": end_date or config.get("end_date") or "",
+                "cadence": payload.get("cadence") or config.get("cadence", "daily"),
+                "field_mapping": effective_field_mapping,
+            }
+        )
+        save_sync_config(config)
+
+    result = sync_incidents_from_api(
+        dry_run=dry_run,
+        start_date=effective_start_date,
+        end_date=effective_end_date,
+        token=effective_token,
+        base_url=effective_base_url,
+        include_samples=include_samples,
+        field_mapping=effective_field_mapping,
+    )
+    status_code = 200 if not result.get("error") else 500
+    return jsonify(result), status_code
+
+
+@app.route("/sync/config", methods=["POST"])
+def update_sync_config():
+    payload = request.get_json(silent=True) or {}
+    config = load_sync_config()
+
+    updated_mapping = normalize_field_mapping(payload.get("field_mapping") or config.get("field_mapping"))
+
+    updated = {
+        "cadence": payload.get("cadence") or config.get("cadence", "daily"),
+        "base_url": payload.get("base_url") or "",
+        "token": payload.get("token") or config.get("token") or "",
+        "start_date": payload.get("start_date") or "",
+        "end_date": payload.get("end_date") or "",
+        "last_sync": config.get("last_sync") or {},
+        "field_mapping": updated_mapping,
+    }
+
+    save_sync_config(updated)
+    sanitized = dict(updated)
+    sanitized["token"] = "" if not updated.get("token") else "saved"
+    return jsonify({"config": sanitized})
+
+
 if __name__ == "__main__":
-    # For the Pi
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Incident Free Days")
+    parser.add_argument(
+        "--sync-incidents",
+        action="store_true",
+        help="Fetch incidents from incident.io and persist them to the local data files.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the sync without writing to incidents.json/others.json.",
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind the Flask server")
+    parser.add_argument("--port", default=8080, type=int, help="Port for the Flask server")
+
+    args = parser.parse_args()
+
+    if args.sync_incidents:
+        summary = sync_incidents_from_api(dry_run=args.dry_run)
+        print(json.dumps(summary, indent=2))
+    else:
+        app.run(host=args.host, port=args.port, debug=False)
