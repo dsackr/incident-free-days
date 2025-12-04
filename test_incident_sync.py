@@ -61,6 +61,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["severity"], "Other (Sev 6)")
         self.assertEqual(payload["product"], "SIS Ohio")
         self.assertEqual(payload["pillar"], "Student Solutions")
+        self.assertEqual(payload["reported_at"], "2025-12-03T17:32:14.019000")
 
     def test_normalize_incident_payloads_fallbacks_to_created_and_unknowns(self):
         api_incident = {
@@ -74,10 +75,46 @@ class IncidentSyncTests(unittest.TestCase):
         payload = payloads[0]
 
         self.assertEqual(payload["inc_number"], "INC-401")
-        self.assertEqual(payload["date"], "2024-02-01")
+        self.assertEqual(payload["date"], "2024-01-31")
         self.assertEqual(payload["severity"], "Sev 1")
         self.assertEqual(payload["product"], "Unknown")
         self.assertEqual(payload["pillar"], "Unknown")
+        self.assertEqual(payload["reported_at"], "2024-01-31T19:00:00")
+
+    def test_normalize_incident_payloads_splits_multiple_products(self):
+        api_incident = {
+            "reference": "INC-999",
+            "severity": {"name": "Other (Sev 6)"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-07-10T01:00:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Product A"}},
+                        {"value_catalog_entry": {"name": "Product B"}},
+                    ],
+                },
+                {
+                    "custom_field": {"name": "Solution Pillar"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Business Solutions"}},
+                    ],
+                },
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual({p["product"] for p in payloads}, {"Product A", "Product B"})
+        for payload in payloads:
+            self.assertEqual(payload["pillar"], "Business Solutions")
+            self.assertEqual(payload["date"], "2024-07-09")
+            self.assertEqual(payload["reported_at"], "2024-07-09T20:00:00")
 
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):

@@ -409,18 +409,21 @@ def _extract_reported_date(api_incident):
         raw_value = (entry.get("value") or {}).get("value")
         parsed = parse_datetime(raw_value)
         if parsed:
-            return parsed.date(), raw_value
+            reported = shift_utc_to_est(parsed)
+            return reported.date(), reported.isoformat()
 
     created_raw = api_incident.get("created_at")
     created_dt = parse_datetime(created_raw)
     if created_dt:
-        return created_dt.date(), created_raw
+        reported = shift_utc_to_est(created_dt)
+        return reported.date(), reported.isoformat()
 
     return None, None
 
 
-def _get_catalog_custom_value(api_incident, field_name, default="Unknown"):
+def _get_catalog_custom_values(api_incident, field_name, default="Unknown"):
     target = (field_name or "").strip().casefold()
+    results = []
 
     for entry in api_incident.get("custom_field_entries") or []:
         custom_field = entry.get("custom_field") or {}
@@ -428,14 +431,16 @@ def _get_catalog_custom_value(api_incident, field_name, default="Unknown"):
         if name != target:
             continue
 
-        values = entry.get("values") or []
-        if not values:
-            return default
+        for value in entry.get("values") or []:
+            catalog_entry = value.get("value_catalog_entry") or {}
+            name_value = catalog_entry.get("name")
+            if name_value:
+                results.append(name_value)
 
-        catalog_entry = values[0].get("value_catalog_entry") or {}
-        return catalog_entry.get("name") or default
+    if results:
+        return results
 
-    return default
+    return [default]
 
 
 def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
@@ -456,20 +461,26 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     if not reported_date:
         return []
 
-    product = _get_catalog_custom_value(api_incident, "Product", default="Unknown")
-    pillar = _get_catalog_custom_value(api_incident, "Solution Pillar", default="Unknown")
+    products = _get_catalog_custom_values(api_incident, "Product", default="Unknown")
+    pillar_values = _get_catalog_custom_values(api_incident, "Solution Pillar", default="Unknown")
+    pillar = pillar_values[0] if pillar_values else "Unknown"
 
-    payload = {
-        "inc_number": inc_number,
-        "date": reported_date.isoformat(),
-        "severity": severity,
-        "product": product or "Unknown",
-        "pillar": pillar or "Unknown",
-        "reported_at": reported_raw or f"{reported_date.isoformat()}T00:00:00",
-        "event_type": "Operational Incident",
-    }
+    payloads = []
+    for product in products:
+        payloads.append(
+            {
+                "inc_number": inc_number,
+                "date": reported_date.isoformat(),
+                "severity": severity,
+                "product": product or "Unknown",
+                "pillar": pillar or "Unknown",
+                "reported_at": reported_raw
+                or f"{reported_date.isoformat()}T00:00:00",
+                "event_type": "Operational Incident",
+            }
+        )
 
-    return [payload]
+    return payloads
 
 
 def sync_incidents_from_api(
