@@ -467,6 +467,14 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     )
     pillar_hint = pillar_values[0] if pillar_values else "Unknown"
 
+    incident_type_raw = api_incident.get("incident_type") or api_incident.get("type")
+    if isinstance(incident_type_raw, dict):
+        event_type = incident_type_raw.get("name") or incident_type_raw.get("label") or ""
+    else:
+        event_type = str(incident_type_raw).strip() if incident_type_raw else ""
+
+    event_type = event_type or "Operational Incident"
+
     payloads = []
     for product in products:
         resolved_pillar = resolve_pillar(
@@ -484,7 +492,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "pillar": resolved_pillar or pillar_hint or "Unknown",
                 "reported_at": reported_raw
                 or f"{reported_date.isoformat()}T00:00:00",
-                "event_type": "Operational Incident",
+                "event_type": event_type,
             }
         )
 

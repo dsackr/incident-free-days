@@ -122,6 +122,34 @@ class IncidentSyncTests(unittest.TestCase):
             self.assertEqual(payload["date"], "2024-07-09")
             self.assertEqual(payload["reported_at"], "2024-07-09T20:00:00")
 
+    def test_normalize_incident_payloads_uses_incident_type(self):
+        api_incident = {
+            "reference": "INC-777",
+            "severity": {"name": "Sev4"},
+            "incident_type": {"name": "Deployment Event"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-08-15T10:00:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Service X"}},
+                    ],
+                }
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["event_type"], "Deployment Event")
+        self.assertEqual(payload["product"], "Service X")
+        self.assertEqual(payload["date"], "2024-08-15")
+
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):
         api_incident = {
@@ -146,6 +174,45 @@ class IncidentSyncTests(unittest.TestCase):
 
         self.assertFalse(os.path.exists(self.incidents_file))
         self.assertFalse(os.path.exists(self.other_file))
+
+    @mock.patch("incident_io_client.fetch_incidents")
+    def test_sync_routes_non_operational_events(self, mock_fetch_incidents):
+        api_incident = {
+            "reference": "INC-500", 
+            "incident_type": {"name": "Deployment Event"},
+            "severity": {"name": "Sev2"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-09-01T15:00:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Product X"}},
+                    ],
+                }
+            ],
+        }
+
+        mock_fetch_incidents.return_value = [api_incident]
+
+        summary = app.sync_incidents_from_api(
+            dry_run=False,
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+
+        self.assertEqual(summary["added_incidents"], 0)
+        self.assertEqual(summary["added_other_events"], 1)
+
+        with open(self.other_file, "r") as f:
+            stored = json.load(f)
+
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0]["event_type"], "Deployment Event")
 
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_filters_by_date_and_returns_samples(self, mock_fetch_incidents):
