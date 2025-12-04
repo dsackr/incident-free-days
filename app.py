@@ -402,7 +402,8 @@ def _extract_first_value(api_incident, keys):
 def _extract_reported_date(api_incident):
     for entry in api_incident.get("incident_timestamp_values") or []:
         incident_timestamp = entry.get("incident_timestamp") or {}
-        if incident_timestamp.get("name") != "Reported at":
+        timestamp_name = (incident_timestamp.get("name") or "").strip()
+        if timestamp_name.casefold() != "reported at".casefold():
             continue
 
         raw_value = (entry.get("value") or {}).get("value")
@@ -419,9 +420,12 @@ def _extract_reported_date(api_incident):
 
 
 def _get_catalog_custom_value(api_incident, field_name, default="Unknown"):
+    target = (field_name or "").strip().casefold()
+
     for entry in api_incident.get("custom_field_entries") or []:
         custom_field = entry.get("custom_field") or {}
-        if custom_field.get("name") != field_name:
+        name = (custom_field.get("name") or "").strip().casefold()
+        if name != target:
             continue
 
         values = entry.get("values") or []

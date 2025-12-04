@@ -30,19 +30,19 @@ class IncidentSyncTests(unittest.TestCase):
             "severity": {"name": "Other (Sev 6)"},
             "incident_timestamp_values": [
                 {
-                    "incident_timestamp": {"name": "Reported at"},
+                    "incident_timestamp": {"name": "Reported At"},
                     "value": {"value": "2025-12-03T22:32:14.019Z"},
                 }
             ],
             "custom_field_entries": [
                 {
-                    "custom_field": {"name": "Product"},
+                    "custom_field": {"name": "product"},
                     "values": [
                         {"value_catalog_entry": {"name": "SIS Ohio"}},
                     ],
                 },
                 {
-                    "custom_field": {"name": "Solution Pillar"},
+                    "custom_field": {"name": "solution pillar"},
                     "values": [
                         {"value_catalog_entry": {"name": "Student Solutions"}},
                     ],
