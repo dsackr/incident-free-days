@@ -476,6 +476,38 @@
                 <div class="config-card">
                     <div class="config-card-header">
                         <div>
+                            <h3>Product → pillar key</h3>
+                            <p class="helper-text">View how products are grouped under each pillar from the uploaded mapping.</p>
+                        </div>
+                    </div>
+
+                    {% if products_by_pillar and products_by_pillar.__all__|length > 0 %}
+                        <div class="pillar-map">
+                            <ul class="pillar-map-list">
+                                {% for pillar, products in products_by_pillar.items() if pillar != '__all__' %}
+                                    <li>
+                                        <strong>{{ pillar or 'Unmapped' }}</strong>
+                                        {% if products %}
+                                            <ul>
+                                                {% for product in products %}
+                                                    <li>{{ product }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="helper-text small">No products mapped.</p>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% else %}
+                        <p class="helper-text">Upload a product → pillar key to see mapping details.</p>
+                    {% endif %}
+                </div>
+
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
                             <h3>Dry run &amp; import</h3>
                             <p class="helper-text">Preview mapped payloads, then import all incidents in the selected window.</p>
                         </div>

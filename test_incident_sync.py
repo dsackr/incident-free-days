@@ -82,6 +82,9 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["reported_at"], "2024-01-31T19:00:00")
 
     def test_normalize_incident_payloads_splits_multiple_products(self):
+        with open(app.PRODUCT_KEY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"Product A": "Pillar A", "Product B": "Pillar B"}, f)
+
         api_incident = {
             "reference": "INC-999",
             "severity": {"name": "Other (Sev 6)"},
@@ -112,7 +115,10 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(len(payloads), 2)
         self.assertEqual({p["product"] for p in payloads}, {"Product A", "Product B"})
         for payload in payloads:
-            self.assertEqual(payload["pillar"], "Business Solutions")
+            if payload["product"] == "Product A":
+                self.assertEqual(payload["pillar"], "Pillar A")
+            elif payload["product"] == "Product B":
+                self.assertEqual(payload["pillar"], "Pillar B")
             self.assertEqual(payload["date"], "2024-07-09")
             self.assertEqual(payload["reported_at"], "2024-07-09T20:00:00")
 
