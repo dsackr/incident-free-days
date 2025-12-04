@@ -399,67 +399,73 @@ def _extract_first_value(api_incident, keys):
     return None
 
 
+def _extract_reported_date(api_incident):
+    for entry in api_incident.get("incident_timestamp_values") or []:
+        incident_timestamp = entry.get("incident_timestamp") or {}
+        if incident_timestamp.get("name") != "Reported at":
+            continue
+
+        raw_value = (entry.get("value") or {}).get("value")
+        parsed = parse_datetime(raw_value)
+        if parsed:
+            return parsed.date(), raw_value
+
+    created_raw = api_incident.get("created_at")
+    created_dt = parse_datetime(created_raw)
+    if created_dt:
+        return created_dt.date(), created_raw
+
+    return None, None
+
+
+def _get_catalog_custom_value(api_incident, field_name, default="Unknown"):
+    for entry in api_incident.get("custom_field_entries") or []:
+        custom_field = entry.get("custom_field") or {}
+        if custom_field.get("name") != field_name:
+            continue
+
+        values = entry.get("values") or []
+        if not values:
+            return default
+
+        catalog_entry = values[0].get("value_catalog_entry") or {}
+        return catalog_entry.get("name") or default
+
+    return default
+
+
 def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     mapping = mapping if mapping is not None else load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
 
-    inc_number_raw = _extract_first_value(api_incident, field_mapping["inc_number"])
-    inc_number = str(inc_number_raw).strip() if inc_number_raw else None
-
-    severity_field = _extract_first_value(api_incident, field_mapping["severity"])
-    if isinstance(severity_field, dict):
-        severity = (
-            severity_field.get("name")
-            or severity_field.get("label")
-            or severity_field.get("id")
-            or ""
-        )
-    else:
-        severity = severity_field or ""
-
-    event_type_field = _extract_first_value(api_incident, field_mapping["event_type"])
-    if isinstance(event_type_field, dict):
-        event_type = event_type_field.get("name") or event_type_field.get("label") or "Operational Incident"
-    else:
-        event_type = (event_type_field or "Operational Incident").strip() or "Operational Incident"
-
-    reported_raw = _extract_first_value(api_incident, field_mapping["reported_at"])
-    closed_raw = _extract_first_value(api_incident, field_mapping["closed_at"])
-
-    reported_dt = shift_utc_to_est(parse_datetime(reported_raw))
-    closed_dt = shift_utc_to_est(parse_datetime(closed_raw))
-
-    raw_duration = _extract_first_value(api_incident, field_mapping["duration_seconds"]) or 0
-    try:
-        duration_seconds = int(raw_duration) if raw_duration is not None else 0
-    except (TypeError, ValueError):
-        duration_seconds = 0
-
-    if not duration_seconds and reported_dt and closed_dt:
-        computed = int((closed_dt - reported_dt).total_seconds())
-        duration_seconds = max(0, computed)
-
-    if not inc_number or reported_dt is None:
+    inc_number = (api_incident.get("reference") or api_incident.get("id") or "").strip()
+    if not inc_number:
         return []
 
-    product_values = _extract_product_values(api_incident, field_mapping["products"])
-    payloads = []
+    severity_raw = api_incident.get("severity")
+    if isinstance(severity_raw, dict):
+        severity = severity_raw.get("name") or severity_raw.get("label") or ""
+    else:
+        severity = str(severity_raw).strip() if severity_raw else ""
 
-    for product in product_values:
-        payloads.append(
-            {
-                "inc_number": inc_number,
-                "reported_at": reported_dt.isoformat(),
-                "closed_at": closed_dt.isoformat() if closed_dt else "",
-                "duration_seconds": duration_seconds,
-                "severity": severity,
-                "pillar": resolve_pillar(product, mapping=mapping),
-                "product": product,
-                "event_type": event_type,
-            }
-        )
+    reported_date, reported_raw = _extract_reported_date(api_incident)
+    if not reported_date:
+        return []
 
-    return payloads
+    product = _get_catalog_custom_value(api_incident, "Product", default="Unknown")
+    pillar = _get_catalog_custom_value(api_incident, "Solution Pillar", default="Unknown")
+
+    payload = {
+        "inc_number": inc_number,
+        "date": reported_date.isoformat(),
+        "severity": severity,
+        "product": product or "Unknown",
+        "pillar": pillar or "Unknown",
+        "reported_at": reported_raw or f"{reported_date.isoformat()}T00:00:00",
+        "event_type": "Operational Incident",
+    }
+
+    return [payload]
 
 
 def sync_incidents_from_api(

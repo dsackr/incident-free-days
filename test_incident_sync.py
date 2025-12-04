@@ -23,66 +23,67 @@ class IncidentSyncTests(unittest.TestCase):
         app.PRODUCT_KEY_FILE = self.original_product_key
         self.temp_dir.cleanup()
 
-    def test_normalize_incident_payloads_computes_duration_and_pillar(self):
-        mapping = {"Search": "Platform"}
+    def test_normalize_incident_payloads_maps_core_fields(self):
         api_incident = {
-            "incident_number": "INC-123",
-            "severity": {"name": "Sev2"},
-            "incident_type": {"name": "Operational Incident"},
-            "started_at": "2024-05-01T10:00:00Z",
-            "resolved_at": "2024-05-01T11:00:00Z",
-            "services": [{"name": "Search"}],
+            "reference": "INC-670",
+            "id": "01KBK5GFE3NX1BRBCQ86R5NW4M",
+            "severity": {"name": "Other (Sev 6)"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2025-12-03T22:32:14.019Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "SIS Ohio"}},
+                    ],
+                },
+                {
+                    "custom_field": {"name": "Solution Pillar"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Student Solutions"}},
+                    ],
+                },
+            ],
         }
 
-        payloads = app.normalize_incident_payloads(api_incident, mapping=mapping)
+        payloads = app.normalize_incident_payloads(api_incident)
         self.assertEqual(len(payloads), 1)
         payload = payloads[0]
 
-        self.assertEqual(payload["inc_number"], "INC-123")
-        self.assertEqual(payload["pillar"], "Platform")
-        self.assertEqual(payload["duration_seconds"], 3600)
-        self.assertEqual(payload["reported_at"], "2024-05-01T05:00:00")
-        self.assertEqual(payload["closed_at"], "2024-05-01T06:00:00")
+        self.assertEqual(payload["inc_number"], "INC-670")
+        self.assertEqual(payload["date"], "2025-12-03")
+        self.assertEqual(payload["severity"], "Other (Sev 6)")
+        self.assertEqual(payload["product"], "SIS Ohio")
+        self.assertEqual(payload["pillar"], "Student Solutions")
 
-    def test_custom_field_mapping_is_respected(self):
-        mapping = {"Search": "Platform"}
+    def test_normalize_incident_payloads_fallbacks_to_created_and_unknowns(self):
         api_incident = {
-            "number": "INC-400",
-            "severity_label": {"label": "Sev1"},
-            "type_info": {"label": "Operational Event"},
-            "created": "2024-01-01T00:00:00Z",
-            "completed": "2024-01-01T01:00:00Z",
-            "services": [{"full_name": "Search"}],
+            "id": "INC-401",
+            "severity": "Sev 1",
+            "created_at": "2024-02-01T00:00:00Z",
         }
 
-        field_mapping = {
-            "inc_number": ["number"],
-            "severity": ["severity_label"],
-            "event_type": ["type_info"],
-            "reported_at": ["created"],
-            "closed_at": ["completed"],
-            "duration_seconds": ["duration_seconds"],
-            "products": ["services"],
-        }
-
-        payloads = app.normalize_incident_payloads(api_incident, mapping=mapping, field_mapping=field_mapping)
+        payloads = app.normalize_incident_payloads(api_incident)
         self.assertEqual(len(payloads), 1)
         payload = payloads[0]
-        self.assertEqual(payload["inc_number"], "INC-400")
-        self.assertEqual(payload["event_type"], "Operational Event")
-        self.assertEqual(payload["product"], "Search")
-        self.assertEqual(payload["duration_seconds"], 3600)
-        self.assertEqual(payload["reported_at"], "2023-12-31T19:00:00")
+
+        self.assertEqual(payload["inc_number"], "INC-401")
+        self.assertEqual(payload["date"], "2024-02-01")
+        self.assertEqual(payload["severity"], "Sev 1")
+        self.assertEqual(payload["product"], "Unknown")
+        self.assertEqual(payload["pillar"], "Unknown")
 
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):
         api_incident = {
-            "incident_number": "INC-200",
-            "severity": "Sev3",
-            "incident_type": {"name": "Operational Incident"},
-            "started_at": "2024-06-01T12:00:00Z",
-            "resolved_at": "2024-06-01T13:00:00Z",
-            "products": ["Checkout"],
+            "reference": "INC-200",
+            "id": "01ABC",
+            "severity": {"name": "Sev3"},
+            "created_at": "2024-06-01T12:00:00Z",
         }
 
         mock_fetch_incidents.return_value = [api_incident]
@@ -105,20 +106,24 @@ class IncidentSyncTests(unittest.TestCase):
     def test_sync_filters_by_date_and_returns_samples(self, mock_fetch_incidents):
         api_incidents = [
             {
-                "incident_number": "INC-300",
+                "reference": "INC-300",
                 "severity": {"name": "Sev2"},
-                "incident_type": {"name": "Operational Incident"},
-                "started_at": "2024-07-10T01:00:00Z",
-                "resolved_at": "2024-07-10T02:00:00Z",
-                "products": ["Search"],
+                "incident_timestamp_values": [
+                    {
+                        "incident_timestamp": {"name": "Reported at"},
+                        "value": {"value": "2024-07-10T01:00:00Z"},
+                    }
+                ],
             },
             {
-                "incident_number": "INC-301",
+                "reference": "INC-301",
                 "severity": {"name": "Sev3"},
-                "incident_type": {"name": "Operational Incident"},
-                "started_at": "2023-05-01T10:00:00Z",
-                "resolved_at": "2023-05-01T10:30:00Z",
-                "products": ["Billing"],
+                "incident_timestamp_values": [
+                    {
+                        "incident_timestamp": {"name": "Reported at"},
+                        "value": {"value": "2023-05-01T10:00:00Z"},
+                    }
+                ],
             },
         ]
 
