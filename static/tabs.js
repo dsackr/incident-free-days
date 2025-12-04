@@ -63,6 +63,34 @@ document.addEventListener("DOMContentLoaded", function () {
     const modalClose = document.getElementById("incident-modal-close");
     const modalBackdrop = document.getElementById("incident-modal-backdrop");
 
+    const formatDateTime = (value) => {
+        if (!value) return null;
+
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        });
+
+        const parts = formatter.formatToParts(parsed).reduce((acc, part) => {
+            acc[part.type] = part.value;
+            return acc;
+        }, {});
+
+        if (parts.month && parts.day && parts.year && parts.hour && parts.minute) {
+            return `${parts.month}/${parts.day}/${parts.year} ${parts.hour}:${parts.minute}`;
+        }
+
+        return formatter.format(parsed);
+    };
+
     const renderModal = (kind, dateStr, incidents) => {
         modalDateEl.textContent = `${kind === "incidents" ? "Incidents" : "Events"} on ${dateStr}`;
 
@@ -83,20 +111,30 @@ document.addEventListener("DOMContentLoaded", function () {
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
                 const extraMeta = [];
-                if (inc.reported_at) {
-                    extraMeta.push(`Reported: ${inc.reported_at}`);
+                const reportedFormatted = formatDateTime(inc.reported_at);
+                const closedFormatted = formatDateTime(inc.closed_at);
+
+                if (reportedFormatted) {
+                    extraMeta.push(`Reported: ${reportedFormatted}`);
                 }
-                if (inc.closed_at) {
-                    extraMeta.push(`Closed: ${inc.closed_at}`);
+                if (closedFormatted) {
+                    extraMeta.push(`Closed: ${closedFormatted}`);
                 }
                 if (inc.duration_seconds) {
                     extraMeta.push(`Duration: ${inc.duration_seconds} sec`);
                 }
                 const extraMetaText = extraMeta.length ? ` · ${extraMeta.join(" · ")}` : "";
                 const eventType = inc.event_type ? ` · Type: ${inc.event_type}` : "";
+                const metaParts = [];
+                if (kind === "incidents") {
+                    metaParts.push(`Severity: ${inc.severity || "N/A"}`);
+                }
+                metaParts.push(`Pillar: ${inc.pillar || "N/A"}`);
+                metaParts.push(`Product: ${inc.product || "N/A"}`);
+                const metaText = metaParts.join(" · ");
                 row.innerHTML = `
                     <p class="incident-title">${incidentTitle()}</p>
-                    <p class="incident-meta">Severity: ${inc.severity || "N/A"} · Pillar: ${inc.pillar || "N/A"} · Product: ${inc.product || "N/A"}${eventType}${extraMetaText}</p>
+                    <p class="incident-meta">${metaText}${eventType}${extraMetaText}</p>
                 `;
                 modalBody.appendChild(row);
             });
