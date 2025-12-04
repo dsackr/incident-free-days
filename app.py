@@ -31,6 +31,8 @@ DEFAULT_FIELD_MAPPING = {
     "products": ["products", "services", "service", "teams", "impacted_services", "components"],
 }
 
+RECENT_SYNC_EVENT_LIMIT = 25
+
 
 def load_events(path):
     if not os.path.exists(path):
@@ -130,6 +132,30 @@ def save_sync_config(config):
         pass
 
 
+def build_sync_config_view(raw_config):
+    raw_config = raw_config or {}
+    last_sync_raw = raw_config.get("last_sync") or {}
+
+    last_sync_total = last_sync_raw.get("total_events")
+    if last_sync_total is None:
+        last_sync_total = (last_sync_raw.get("added_incidents") or 0) + (
+            last_sync_raw.get("added_other_events") or 0
+        )
+
+    return {
+        "cadence": raw_config.get("cadence", "daily"),
+        "base_url": raw_config.get("base_url", ""),
+        "start_date": raw_config.get("start_date", ""),
+        "end_date": raw_config.get("end_date", ""),
+        "token_saved": bool(raw_config.get("token")),
+        "last_sync": last_sync_raw,
+        "last_sync_display": format_sync_timestamp(last_sync_raw.get("timestamp")),
+        "last_sync_total": last_sync_total,
+        "last_sync_events": last_sync_raw.get("events") or [],
+        "field_mapping": raw_config.get("field_mapping", DEFAULT_FIELD_MAPPING),
+    }
+
+
 def parse_date(raw_value):
     if not raw_value:
         return None
@@ -210,6 +236,33 @@ def parse_datetime(raw_value):
             continue
 
     return None
+
+
+def format_sync_timestamp(raw_value, tz_name="America/New_York"):
+    if not raw_value:
+        return ""
+
+    text = str(raw_value).strip()
+    if not text:
+        return ""
+
+    candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
+
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return text
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    try:
+        target_tz = ZoneInfo(tz_name)
+    except Exception:
+        target_tz = timezone.utc
+
+    localized = parsed.astimezone(target_tz)
+    return localized.strftime("%m/%d/%Y %H:%M")
 
 
 def shift_utc_to_est(dt):
@@ -479,6 +532,13 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
 
     event_type = event_type or "Operational Incident"
 
+    title = (
+        api_incident.get("name")
+        or api_incident.get("title")
+        or api_incident.get("incident_title")
+        or inc_number
+    )
+
     payloads = []
     for product in products:
         resolved_pillar = resolve_pillar(
@@ -497,6 +557,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "reported_at": reported_raw
                 or f"{reported_date.isoformat()}T00:00:00",
                 "event_type": event_type,
+                "title": title,
             }
         )
 
@@ -558,6 +619,7 @@ def sync_incidents_from_api(
     added_incidents = 0
     added_other_events = 0
     sample_payloads = []
+    added_event_details = []
 
     incident_seen = set(existing_incidents)
     other_seen = set(existing_other)
@@ -597,6 +659,18 @@ def sync_incidents_from_api(
                 if not dry_run:
                     other_events.append(payload)
 
+            if not dry_run:
+                added_event_details.append(
+                    {
+                        "inc_number": payload.get("inc_number", ""),
+                        "event_type": payload.get("event_type", ""),
+                        "title": payload.get("title", payload.get("inc_number", "")),
+                        "pillar": payload.get("pillar", ""),
+                        "product": payload.get("product", ""),
+                        "severity": payload.get("severity", ""),
+                    }
+                )
+
             if include_samples and len(sample_payloads) < 10:
                 sample_payloads.append(
                     {
@@ -622,6 +696,8 @@ def sync_incidents_from_api(
             "added_other_events": added_other_events,
             "start_date": start_date or "",
             "end_date": end_date or "",
+            "events": added_event_details[:RECENT_SYNC_EVENT_LIMIT],
+            "total_events": len(added_event_details),
         }
         save_sync_config(config)
 
@@ -659,15 +735,7 @@ def index():
     active_tab = request.args.get("tab", "incidents")
 
     sync_config_raw = load_sync_config()
-    sync_config = {
-        "cadence": sync_config_raw.get("cadence", "daily"),
-        "base_url": sync_config_raw.get("base_url", ""),
-        "start_date": sync_config_raw.get("start_date", ""),
-        "end_date": sync_config_raw.get("end_date", ""),
-        "token_saved": bool(sync_config_raw.get("token")),
-        "last_sync": sync_config_raw.get("last_sync") or {},
-        "field_mapping": sync_config_raw.get("field_mapping", DEFAULT_FIELD_MAPPING),
-    }
+    sync_config = build_sync_config_view(sync_config_raw)
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
 
     try:
@@ -1570,9 +1638,8 @@ def update_sync_config():
     }
 
     save_sync_config(updated)
-    sanitized = dict(updated)
-    sanitized["token"] = "" if not updated.get("token") else "saved"
-    return jsonify({"config": sanitized})
+    view_config = build_sync_config_view(updated)
+    return jsonify({"config": view_config})
 
 
 if __name__ == "__main__":

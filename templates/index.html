@@ -466,9 +466,43 @@
 
                     <button type="button" class="primary-button" id="save-sync-settings">Save settings</button>
 
-                    {% if sync_config.last_sync.timestamp %}
                     <div class="helper-text small config-meta">
-                        Last import: {{ sync_config.last_sync.timestamp }} (Incidents: {{ sync_config.last_sync.added_incidents | default(0) }}, Other events: {{ sync_config.last_sync.added_other_events | default(0) }})
+                        Set to sync {{ sync_config.cadence }} (pulling any new incidents since last sync).
+                    </div>
+
+                    {% if sync_config.last_sync_display %}
+                    <div class="helper-text small config-meta">
+                        Last import: {{ sync_config.last_sync_display }} ET ({{ sync_config.last_sync_total | default(0) }} new events; Incidents: {{ sync_config.last_sync.added_incidents | default(0) }}, Other events: {{ sync_config.last_sync.added_other_events | default(0) }})
+                    </div>
+                    {% endif %}
+
+                    {% if sync_config.last_sync_events %}
+                    <div class="sync-results last-sync-results" aria-live="polite">
+                        <div class="notice info">Pulled {{ sync_config.last_sync_total }} new events.</div>
+                        <table class="incidents-table">
+                            <thead>
+                                <tr>
+                                    <th>Event ID</th>
+                                    <th>Event Type</th>
+                                    <th>Title</th>
+                                    <th>Pillar</th>
+                                    <th>Product</th>
+                                    <th>Severity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in sync_config.last_sync_events %}
+                                <tr>
+                                    <td>{{ event.inc_number }}</td>
+                                    <td>{{ event.event_type }}</td>
+                                    <td>{{ event.title }}</td>
+                                    <td>{{ event.pillar }}</td>
+                                    <td>{{ event.product }}</td>
+                                    <td>{{ event.severity }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                     {% endif %}
                 </div>
