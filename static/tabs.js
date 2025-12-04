@@ -669,7 +669,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
-    if (syncConfigData?.last_sync?.timestamp) {
+    if (syncConfigData?.last_sync_display) {
+        setStatusPill("info", `Last sync ${syncConfigData.last_sync_display} ET`);
+    } else if (syncConfigData?.last_sync?.timestamp) {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync.timestamp}`);
     }
 
