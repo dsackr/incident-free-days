@@ -710,8 +710,7 @@ def sync_incidents_from_api(
     }
 
 
-@app.route("/", methods=["GET"])
-def index():
+def render_dashboard(tab_override=None, show_config_tab=False):
     year_str = request.args.get("year")
     view_mode = request.args.get("view", "yearly")
     month_str = request.args.get("month")
@@ -732,7 +731,15 @@ def index():
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
-    active_tab = request.args.get("tab", "incidents")
+    active_tab = tab_override or request.args.get("tab", "incidents")
+    allowed_tabs = {"incidents", "others"}
+    if show_config_tab:
+        allowed_tabs.add("form")
+
+    if active_tab not in allowed_tabs:
+        active_tab = "incidents"
+    if not show_config_tab and active_tab == "form":
+        return redirect(url_for("ioadmin"))
 
     sync_config_raw = load_sync_config()
     sync_config = build_sync_config_view(sync_config_raw)
@@ -1170,7 +1177,18 @@ def index():
         client_ip=client_ip,
         sync_config=sync_config,
         env_token_available=env_token_available,
+        show_config_tab=show_config_tab,
     )
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_dashboard()
+
+
+@app.route("/ioadmin", methods=["GET"])
+def ioadmin():
+    return render_dashboard(tab_override="form", show_config_tab=True)
 
 
 @app.route("/calendar/eink.png")
