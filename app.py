@@ -983,9 +983,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             else:
                 intensity_class = "day-incident-light"
 
-            sev1_present = any(str(evt.get("severity")) == "1" for evt in day_events)
-            if sev1_present:
-                return f"{intensity_class} day-sev1-marker"
             return intensity_class
 
         return "day-ok" if day < today else "day-none"
@@ -1337,19 +1334,16 @@ def calendar_eink():
         if events:
             sev6_only = all(is_sev6(evt.get("severity")) for evt in events)
             if sev6_only:
-                return "sev6", False
+                return "sev6"
 
             count = len(events)
-            sev1_present = any(str(evt.get("severity")) == "1" for evt in events)
-
             if count >= 4:
-                return "heavy", sev1_present
+                return "heavy"
             if count >= 2:
-                return "medium", sev1_present
-            return "light", sev1_present
+                return "medium"
+            return "light"
 
-        status = "ok" if day_obj < today else "none"
-        return status, False
+        return "ok" if day_obj < today else "none"
 
     # Calendar grid
     cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
@@ -1363,7 +1357,7 @@ def calendar_eink():
             y1 = y0 + cell_h
 
             if day.month == month:
-                status, sev1_present = classify_day(day)
+                status = classify_day(day)
                 fill_color = colors[status]
                 text_color = text_colors[status]
                 outline_color = (0, 0, 0)
@@ -1371,18 +1365,9 @@ def calendar_eink():
                 fill_color = (240, 240, 240)
                 text_color = (120, 120, 120)
                 outline_color = (180, 180, 180)
-                sev1_present = False
 
             # Cell fill and border
             draw.rectangle([x0, y0, x1, y1], fill=fill_color, outline=outline_color)
-
-            if sev1_present and day.month == month:
-                inset = 4
-                draw.rectangle(
-                    [x0 + inset, y0 + inset, x1 - inset, y1 - inset],
-                    outline=(127, 0, 0),
-                    width=3,
-                )
 
             # Day number in top-left of cell
             if day.month == month:
