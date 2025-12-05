@@ -62,6 +62,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["product"], "SIS Ohio")
         self.assertEqual(payload["pillar"], "Student Solutions")
         self.assertEqual(payload["reported_at"], "2025-12-03T17:32:14-05:00")
+        self.assertEqual(payload["rca_classification"], "Unknown")
 
     def test_normalize_incident_payloads_fallbacks_to_created_and_unknowns(self):
         api_incident = {
@@ -149,6 +150,37 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["event_type"], "Deployment Event")
         self.assertEqual(payload["product"], "Service X")
         self.assertEqual(payload["date"], "2024-08-15")
+
+    def test_normalize_incident_payloads_includes_rca_classification(self):
+        api_incident = {
+            "reference": "INC-1234",
+            "severity": {"name": "Sev2"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-11-05T09:15:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [{"value_catalog_entry": {"name": "Widget"}}],
+                },
+                {
+                    "custom_field": {"name": "RCA Classification"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Code"}},
+                        {"value_text": "Additional Context"},
+                    ],
+                },
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["rca_classification"], "Code, Additional Context")
 
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):

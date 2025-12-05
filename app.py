@@ -500,6 +500,42 @@ def _get_catalog_custom_values(api_incident, field_name, default="Unknown"):
     return [default]
 
 
+def _get_custom_field_value(api_incident, field_name, default="Unknown"):
+    target = (field_name or "").strip().casefold()
+
+    for entry in api_incident.get("custom_field_entries") or []:
+        custom_field = entry.get("custom_field") or {}
+        name = (custom_field.get("name") or "").strip().casefold()
+        if name != target:
+            continue
+
+        values = entry.get("values") or []
+        extracted = []
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+
+            catalog_entry = value.get("value_catalog_entry")
+            if isinstance(catalog_entry, dict) and catalog_entry.get("name"):
+                extracted.append(catalog_entry.get("name"))
+                continue
+
+            for key in ("value", "value_text", "value_numeric", "value_boolean"):
+                raw_value = value.get(key)
+                if raw_value not in (None, ""):
+                    extracted.append(str(raw_value))
+                    break
+
+        if extracted:
+            return ", ".join(str(val) for val in extracted if str(val).strip())
+
+        raw_value = entry.get("value")
+        if raw_value not in (None, ""):
+            return str(raw_value)
+
+    return default
+
+
 def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     mapping = mapping if mapping is not None else load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
@@ -523,6 +559,8 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
         api_incident, "Solution Pillar", default="Unknown"
     )
     pillar_hint = pillar_values[0] if pillar_values else "Unknown"
+
+    rca_classification = _get_custom_field_value(api_incident, "RCA Classification", default="Unknown")
 
     incident_type_raw = api_incident.get("incident_type") or api_incident.get("type")
     if isinstance(incident_type_raw, dict):
@@ -558,6 +596,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 or f"{reported_date.isoformat()}T00:00:00",
                 "event_type": event_type,
                 "title": title,
+                "rca_classification": rca_classification,
             }
         )
 
