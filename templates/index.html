@@ -168,28 +168,21 @@
                 </div>
 
                 <div id="incident-calendar-export">
-                    <div class="legend">
-                        <span class="legend-item">
-                            <span class="legend-color legend-grey"></span> No data / future
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-green"></span> No incident
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-yellow"></span> Sev6 incident
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-red-light"></span> 1 incident
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-red-medium"></span> 2-3 incidents
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-red"></span> 4+ incidents
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-sev1-marker"></span> Sev1 present
-                        </span>
+                    <div class="legend incident-legend">
+                        <div class="legend-gradient" aria-label="Incident intensity scale">
+                            <div class="legend-gradient-bar" aria-hidden="true"></div>
+                            <div class="legend-gradient-labels" aria-hidden="true">
+                                <span>No incidents</span>
+                                <span>Sev6 only</span>
+                                <span>1 incident</span>
+                                <span>4+ incidents</span>
+                            </div>
+                        </div>
+                        <div class="legend-row">
+                            <span class="legend-item">
+                                <span class="legend-color legend-grey"></span> No data / future
+                            </span>
+                        </div>
                     </div>
 
                     <div class="months-grid {% if incident_months|length == 1 %}single-column{% endif %}">

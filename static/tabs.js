@@ -105,8 +105,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     const label = inc.inc_number || "Incident";
                     if (!inc.inc_number) return label;
 
+                    const incidentId = inc.inc_number.replace(/^INC-/i, "");
+                    const idForUrl = incidentId || inc.inc_number;
                     const url = `https://app.incident.io/myfrontline/incidents/${encodeURIComponent(
-                        inc.inc_number
+                        idForUrl
                     )}`;
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
