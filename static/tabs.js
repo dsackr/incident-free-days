@@ -296,6 +296,27 @@ document.addEventListener("DOMContentLoaded", function () {
     updateProductsForPillar();
     syncPillarToProduct();
 
+    const setupAutoSubmitFilters = () => {
+        const forms = document.querySelectorAll(".control-form");
+
+        forms.forEach((form) => {
+            const triggerSubmit = () => {
+                if (typeof form.requestSubmit === "function") {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            };
+
+            const inputs = form.querySelectorAll("select, input[type='checkbox']");
+            inputs.forEach((input) => {
+                input.addEventListener("change", triggerSubmit);
+            });
+        });
+    };
+
+    setupAutoSubmitFilters();
+
     const buildStyleString = (computed) =>
         Array.from(computed)
             .map((prop) => `${prop}:${computed.getPropertyValue(prop)};`)
