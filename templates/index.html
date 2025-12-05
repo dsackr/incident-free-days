@@ -468,23 +468,24 @@
                     <button type="button" class="primary-button" id="save-sync-settings">Save settings</button>
 
                     <div class="helper-text small config-meta">
-                        Set to sync {{ sync_config.cadence }} (pulling any new incidents since last sync).
+                        Set to sync {{ sync_config.cadence }} (pulling the last 14 days of updates by default).
                     </div>
 
                     {% if sync_config.last_sync_display %}
                     <div class="helper-text small config-meta">
-                        Last import: {{ sync_config.last_sync_display }} ET ({{ sync_config.last_sync_total | default(0) }} new events; Incidents: {{ sync_config.last_sync.added_incidents | default(0) }}, Other events: {{ sync_config.last_sync.added_other_events | default(0) }})
+                        Last import: {{ sync_config.last_sync_display }} ET ({{ sync_config.last_sync_total | default(0) }} new/updated events; Incidents added: {{ sync_config.last_sync.added_incidents | default(0) }}, Other events added: {{ sync_config.last_sync.added_other_events | default(0) }}, Updated: {{ sync_config.last_sync.updated_events | default(0) }})
                     </div>
                     {% endif %}
 
                     {% if sync_config.last_sync_events %}
                     <div class="sync-results last-sync-results" aria-live="polite">
-                        <div class="notice info">Pulled {{ sync_config.last_sync_total }} new events.</div>
+                        <div class="notice info">Pulled {{ sync_config.last_sync_total }} new or updated events.</div>
                         <table class="incidents-table">
                             <thead>
                                 <tr>
                                     <th>Event ID</th>
                                     <th>Event Type</th>
+                                    <th>Change</th>
                                     <th>Title</th>
                                     <th>Pillar</th>
                                     <th>Product</th>
@@ -496,6 +497,7 @@
                                 <tr>
                                     <td>{{ event.inc_number }}</td>
                                     <td>{{ event.event_type }}</td>
+                                    <td>{{ event.change_type | default('added') }}</td>
                                     <td>{{ event.title }}</td>
                                     <td>{{ event.pillar }}</td>
                                     <td>{{ event.product }}</td>
@@ -531,6 +533,7 @@
                     <div class="button-row">
                         <button type="button" class="secondary-button" id="sync-dry-run">Dry run mapping</button>
                         <button type="button" class="primary-button" id="sync-import">Import incidents</button>
+                        <button type="button" class="danger-button" id="wipe-data">Wipe local data</button>
                     </div>
 
                     <div id="sync-results" class="sync-results" aria-live="polite"></div>

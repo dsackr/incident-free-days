@@ -543,6 +543,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const saveSettingsButton = document.getElementById("save-sync-settings");
     const dryRunButton = document.getElementById("sync-dry-run");
     const importButton = document.getElementById("sync-import");
+    const wipeButton = document.getElementById("wipe-data");
     const resultsEl = document.getElementById("sync-results");
     const previewBody = document.getElementById("mapping-preview-body");
     const statusPillContainer = document.getElementById("sync-status-pill");
@@ -613,7 +614,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const summary = document.createElement("div");
         summary.className = "notice success";
-        summary.innerHTML = `Fetched ${result.fetched} • Added incidents: ${result.added_incidents} • Added other events: ${result.added_other_events} ${result.dry_run ? "(dry run)" : ""}`;
+        summary.innerHTML = `Fetched ${result.fetched} • Added incidents: ${result.added_incidents} • Added other events: ${result.added_other_events} • Updated: ${result.updated_events || 0} ${result.dry_run ? "(dry run)" : ""}`;
         resultsEl.innerHTML = "";
         resultsEl.appendChild(summary);
 
@@ -692,6 +693,29 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
+    const handleWipeData = async () => {
+        if (!confirm("Remove all local incident data? This cannot be undone.")) {
+            return;
+        }
+
+        setStatusPill("warning", "Clearing local data");
+        try {
+            const response = await fetch("/sync/wipe", { method: "POST" });
+            if (!response.ok) {
+                resultsEl.innerHTML = `<div class="notice error">Failed to delete local data.</div>`;
+                setStatusPill("error", "Wipe failed");
+                return;
+            }
+
+            resultsEl.innerHTML = `<div class="notice success">Local incident data cleared.</div>`;
+            setStatusPill("success", "Data cleared");
+        } catch (err) {
+            console.error("Wipe failed", err);
+            resultsEl.innerHTML = `<div class="notice error">Unable to clear data.</div>`;
+            setStatusPill("error", "Wipe failed");
+        }
+    };
+
     if (syncConfigData?.last_sync_display) {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync_display} ET`);
     } else if (syncConfigData?.last_sync?.timestamp) {
@@ -701,4 +725,5 @@ document.addEventListener("DOMContentLoaded", function () {
     dryRunButton?.addEventListener("click", () => handleSyncRequest(true));
     importButton?.addEventListener("click", () => handleSyncRequest(false));
     saveSettingsButton?.addEventListener("click", handleSaveSettings);
+    wipeButton?.addEventListener("click", handleWipeData);
 });

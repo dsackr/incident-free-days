@@ -32,6 +32,7 @@ DEFAULT_FIELD_MAPPING = {
 }
 
 RECENT_SYNC_EVENT_LIMIT = 25
+DEFAULT_SYNC_WINDOW_DAYS = 14
 
 
 def load_events(path):
@@ -140,6 +141,8 @@ def build_sync_config_view(raw_config):
     if last_sync_total is None:
         last_sync_total = (last_sync_raw.get("added_incidents") or 0) + (
             last_sync_raw.get("added_other_events") or 0
+        ) + (
+            last_sync_raw.get("updated_events") or 0
         )
 
     return {
@@ -616,10 +619,11 @@ def sync_incidents_from_api(
     field_mapping=None,
 ):
     config_defaults = load_sync_config()
-    last_sync_timestamp = (config_defaults.get("last_sync") or {}).get("timestamp")
+    today = date.today()
+    default_start = today - timedelta(days=DEFAULT_SYNC_WINDOW_DAYS - 1)
 
-    effective_start = start_date or config_defaults.get("start_date") or last_sync_timestamp
-    effective_end = end_date or config_defaults.get("end_date")
+    effective_start = start_date or config_defaults.get("start_date") or default_start.isoformat()
+    effective_end = end_date or config_defaults.get("end_date") or today.isoformat()
 
     start_date_obj = parse_date(effective_start) if effective_start else None
     end_date_obj = parse_date(effective_end) if effective_end else None
@@ -653,15 +657,39 @@ def sync_incidents_from_api(
             token=token,
         )
     except incident_io_client.IncidentAPIError as exc:
-        return {"error": str(exc), "added_incidents": 0, "added_other_events": 0, "dry_run": dry_run}
+        return {
+            "error": str(exc),
+            "added_incidents": 0,
+            "added_other_events": 0,
+            "updated_events": 0,
+            "dry_run": dry_run,
+        }
 
     added_incidents = 0
     added_other_events = 0
+    updated_events = 0
     sample_payloads = []
     added_event_details = []
 
     incident_seen = set(existing_incidents)
     other_seen = set(existing_other)
+
+    incident_lookup = {
+        (
+            inc.get("inc_number"),
+            (inc.get("product") or "").strip(),
+        ): inc
+        for inc in incidents
+        if inc.get("inc_number")
+    }
+    other_lookup = {
+        (
+            evt.get("inc_number"),
+            (evt.get("product") or "").strip(),
+        ): evt
+        for evt in other_events
+        if evt.get("inc_number")
+    }
 
     for api_incident in fetched:
         normalized = normalize_incident_payloads(api_incident, mapping=mapping, field_mapping=field_mapping)
@@ -683,22 +711,48 @@ def sync_incidents_from_api(
             lookup_key = (payload.get("inc_number"), (payload.get("product") or "").strip())
             is_operational = payload.get("event_type") == "Operational Incident"
 
+            target_lookup = incident_lookup if is_operational else other_lookup
+            target_collection = incidents if is_operational else other_events
+            seen_collection = incident_seen if is_operational else other_seen
+
+            existing = target_lookup.get(lookup_key)
+            if existing:
+                differences = {
+                    field: value for field, value in payload.items() if existing.get(field) != value
+                }
+
+                if differences:
+                    updated_events += 1
+                    if not dry_run:
+                        existing.update(differences)
+                        if len(added_event_details) < RECENT_SYNC_EVENT_LIMIT:
+                            added_event_details.append(
+                                {
+                                    "inc_number": payload.get("inc_number", ""),
+                                    "event_type": payload.get("event_type", ""),
+                                    "title": payload.get("title", payload.get("inc_number", "")),
+                                    "pillar": payload.get("pillar", ""),
+                                    "product": payload.get("product", ""),
+                                    "severity": payload.get("severity", ""),
+                                    "change_type": "updated",
+                                }
+                            )
+                continue
+
             if is_operational:
-                if lookup_key in incident_seen:
-                    continue
                 added_incidents += 1
-                incident_seen.add(lookup_key)
+                seen_collection.add(lookup_key)
                 if not dry_run:
                     incidents.append(payload)
+                    incident_lookup[lookup_key] = payload
             else:
-                if lookup_key in other_seen:
-                    continue
                 added_other_events += 1
-                other_seen.add(lookup_key)
+                seen_collection.add(lookup_key)
                 if not dry_run:
                     other_events.append(payload)
+                    other_lookup[lookup_key] = payload
 
-            if not dry_run:
+            if not dry_run and len(added_event_details) < RECENT_SYNC_EVENT_LIMIT:
                 added_event_details.append(
                     {
                         "inc_number": payload.get("inc_number", ""),
@@ -707,6 +761,7 @@ def sync_incidents_from_api(
                         "pillar": payload.get("pillar", ""),
                         "product": payload.get("product", ""),
                         "severity": payload.get("severity", ""),
+                        "change_type": "added",
                     }
                 )
 
@@ -733,8 +788,9 @@ def sync_incidents_from_api(
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "added_incidents": added_incidents,
             "added_other_events": added_other_events,
-            "start_date": start_date or "",
-            "end_date": end_date or "",
+            "updated_events": updated_events,
+            "start_date": effective_start or "",
+            "end_date": effective_end or "",
             "events": added_event_details[:RECENT_SYNC_EVENT_LIMIT],
             "total_events": len(added_event_details),
         }
@@ -744,6 +800,7 @@ def sync_incidents_from_api(
         "fetched": len(fetched),
         "added_incidents": added_incidents,
         "added_other_events": added_other_events,
+        "updated_events": updated_events,
         "dry_run": dry_run,
         "samples": sample_payloads if include_samples else [],
     }
@@ -1682,6 +1739,24 @@ def update_sync_config():
     save_sync_config(updated)
     view_config = build_sync_config_view(updated)
     return jsonify({"config": view_config})
+
+
+@app.route("/sync/wipe", methods=["POST"])
+def wipe_local_data():
+    for path in (DATA_FILE, OTHER_EVENTS_FILE):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
+
+    config = load_sync_config()
+    if config:
+        config["last_sync"] = {}
+        save_sync_config(config)
+
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
