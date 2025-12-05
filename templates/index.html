@@ -14,12 +14,21 @@
 </head>
 <body>
     <div class="page">
-        <h1>{{ year }} Incident Free Days</h1>
+        <div class="page-header">
+            <h1>{{ year }} Incident Free Days</h1>
+            {% if show_config_tab %}
+            <a class="admin-link" href="{{ url_for('index') }}">Dashboard</a>
+            {% else %}
+            <a class="admin-link" href="{{ url_for('ioadmin') }}">Admin</a>
+            {% endif %}
+        </div>
 
         <div class="tabs">
             <button class="tab-button {% if active_tab == 'incidents' %}active{% endif %}" data-tab="incidents-tab">Incidents</button>
             <button class="tab-button {% if active_tab == 'others' %}active{% endif %}" data-tab="others-tab">Other Events</button>
+            {% if show_config_tab %}
             <button class="tab-button {% if active_tab == 'form' %}active{% endif %}" data-tab="form-tab">Configuration</button>
+            {% endif %}
         </div>
 
         <div id="incidents-tab" class="tab-content {% if active_tab == 'incidents' %}active{% endif %}">
@@ -408,6 +417,7 @@
             </div>
         </div>
 
+        {% if show_config_tab %}
         <div id="form-tab" class="tab-content {% if active_tab == 'form' %}active{% endif %}">
             <h2>Configuration</h2>
 
@@ -625,6 +635,8 @@
 
         </div>
     </div>
+
+    {% endif %}
 
     <div class="modal" id="incident-modal" aria-hidden="true" role="dialog">
         <div class="modal-backdrop" id="incident-modal-backdrop"></div>
