@@ -69,7 +69,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload["product"], "SIS Ohio")
         self.assertEqual(payload["pillar"], "Student Solutions")
         self.assertEqual(payload["reported_at"], "2025-12-03T17:32:14-05:00")
-        self.assertEqual(payload["rca_classification"], "Unknown")
+        self.assertEqual(payload["rca_classification"], "Not Classified")
 
     def test_normalize_incident_payloads_fallbacks_to_created_and_unknowns(self):
         api_incident = {
@@ -176,8 +176,8 @@ class IncidentSyncTests(unittest.TestCase):
                 {
                     "custom_field": {"name": "RCA Classification"},
                     "values": [
-                        {"value_catalog_entry": {"name": "Code"}},
-                        {"value_text": "Additional Context"},
+                        {"value": "Code"},
+                        {"value_text": "Ignored"},
                     ],
                 },
             ],
@@ -187,7 +187,62 @@ class IncidentSyncTests(unittest.TestCase):
 
         self.assertEqual(len(payloads), 1)
         payload = payloads[0]
-        self.assertEqual(payload["rca_classification"], "Code, Additional Context")
+        self.assertEqual(payload["rca_classification"], "Code")
+
+    def test_normalize_incident_payloads_uses_rca_field_id(self):
+        api_incident = {
+            "reference": "INC-5678",
+            "severity": {"name": "Sev3"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-11-06T09:15:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"id": "01JZ0PNKHCB3M6NX0AHPABS59D", "name": "Other"},
+                    "values": [
+                        {"value": "Process"},
+                    ],
+                }
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["rca_classification"], "Process")
+
+    def test_normalize_incident_payloads_defaults_rca_when_missing_values(self):
+        api_incident = {
+            "reference": "INC-1234",
+            "severity": {"name": "Sev2"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-11-05T09:15:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {
+                        "id": "01JZ0PNKHCB3M6NX0AHPABS59D",
+                        "name": "RCA Classification",
+                    },
+                    "values": [
+                        {},
+                    ],
+                },
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["rca_classification"], "Not Classified")
 
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):
