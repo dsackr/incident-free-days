@@ -95,11 +95,24 @@ h1 {
     display: block;
 }
 
+.export-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 8px 0 12px;
+}
+
 .export-title {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 700;
     color: #0f3d75;
-    margin: 8px 0 12px;
+}
+
+.incident-legend {
+    flex: 1;
+    min-width: 260px;
 }
 
 .legend {

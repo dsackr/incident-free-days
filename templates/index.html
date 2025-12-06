@@ -168,23 +168,25 @@
                 </div>
 
                 <div id="incident-calendar-export">
-                    <div class="export-title">
-                        {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
-                    </div>
-                    <div class="legend incident-legend">
-                        <div class="legend-gradient" aria-label="Incident intensity scale">
-                            <div class="legend-gradient-bar" aria-hidden="true"></div>
-                            <div class="legend-gradient-labels" aria-hidden="true">
-                                <span>No incidents</span>
-                                <span>Sev6 only</span>
-                                <span>1 incident</span>
-                                <span>4+ incidents</span>
+                    <div class="export-header">
+                        <div class="legend incident-legend">
+                            <div class="legend-gradient" aria-label="Incident intensity scale">
+                                <div class="legend-gradient-bar" aria-hidden="true"></div>
+                                <div class="legend-gradient-labels" aria-hidden="true">
+                                    <span>No incidents</span>
+                                    <span>Sev6 only</span>
+                                    <span>1 incident</span>
+                                    <span>4+ incidents</span>
+                                </div>
+                            </div>
+                            <div class="legend-row">
+                                <span class="legend-item">
+                                    <span class="legend-color legend-grey"></span> No data / future
+                                </span>
                             </div>
                         </div>
-                        <div class="legend-row">
-                            <span class="legend-item">
-                                <span class="legend-color legend-grey"></span> No data / future
-                            </span>
+                        <div class="export-title">
+                            {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
                         </div>
                     </div>
 
@@ -348,22 +350,24 @@
                 </div>
 
                 <div id="other-calendar-export">
-                    <div class="export-title">
-                        {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
-                    </div>
-                    <div class="legend">
-                        <span class="legend-item">
-                            <span class="legend-color legend-grey"></span> No event
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-yellow"></span> Operational Event
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-orange"></span> Deployment Event
-                        </span>
-                        <span class="legend-item">
-                            <span class="legend-color legend-red"></span> War Room
-                        </span>
+                    <div class="export-header">
+                        <div class="legend">
+                            <span class="legend-item">
+                                <span class="legend-color legend-grey"></span> No event
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color legend-yellow"></span> Operational Event
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color legend-orange"></span> Deployment Event
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-color legend-red"></span> War Room
+                            </span>
+                        </div>
+                        <div class="export-title">
+                            {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
+                        </div>
                     </div>
 
                     <div class="months-grid {% if other_months|length == 1 %}single-column{% endif %}">
