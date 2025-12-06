@@ -503,38 +503,25 @@ def _get_catalog_custom_values(api_incident, field_name, default="Unknown"):
     return [default]
 
 
-def _get_custom_field_value(api_incident, field_name, default="Unknown"):
-    target = (field_name or "").strip().casefold()
+def _extract_rca_classification(api_incident, default="Not Classified"):
+    target_name = "rca classification"
+    target_id = "01JZ0PNKHCB3M6NX0AHPABS59D"
 
     for entry in api_incident.get("custom_field_entries") or []:
         custom_field = entry.get("custom_field") or {}
         name = (custom_field.get("name") or "").strip().casefold()
-        if name != target:
+        field_id = (custom_field.get("id") or "").strip()
+
+        if name != target_name and field_id != target_id:
             continue
 
-        values = entry.get("values") or []
-        extracted = []
-        for value in values:
-            if not isinstance(value, dict):
-                continue
+        first_value = (entry.get("values") or [{}])[0]
+        if isinstance(first_value, dict):
+            raw_value = first_value.get("value")
+            if raw_value not in (None, ""):
+                return str(raw_value)
 
-            catalog_entry = value.get("value_catalog_entry")
-            if isinstance(catalog_entry, dict) and catalog_entry.get("name"):
-                extracted.append(catalog_entry.get("name"))
-                continue
-
-            for key in ("value", "value_text", "value_numeric", "value_boolean"):
-                raw_value = value.get(key)
-                if raw_value not in (None, ""):
-                    extracted.append(str(raw_value))
-                    break
-
-        if extracted:
-            return ", ".join(str(val) for val in extracted if str(val).strip())
-
-        raw_value = entry.get("value")
-        if raw_value not in (None, ""):
-            return str(raw_value)
+        return default
 
     return default
 
@@ -563,7 +550,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     )
     pillar_hint = pillar_values[0] if pillar_values else "Unknown"
 
-    rca_classification = _get_custom_field_value(api_incident, "RCA Classification", default="Unknown")
+    rca_classification = _extract_rca_classification(api_incident)
 
     incident_type_raw = api_incident.get("incident_type") or api_incident.get("type")
     if isinstance(incident_type_raw, dict):
@@ -823,6 +810,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     product_filter = request.args.get("product") or None
     severity_params = [value for value in request.args.getlist("severity") if value]
     event_type_params = [value for value in request.args.getlist("event_type") if value]
+    rca_classification_filter = request.args.get("rca_classification") or None
     severity_param_supplied = "severity" in request.args
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
@@ -901,6 +889,13 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     pillars = sorted({value for value in product_pillar_map.values() if value})
     products = products_by_pillar["__all__"]
     severities = sorted({inc.get("severity") for inc in incidents if inc.get("severity")})
+    rca_classifications = sorted(
+        {
+            inc.get("rca_classification")
+            for inc in incidents
+            if inc.get("rca_classification")
+        }
+    )
     event_types = sorted(
         {
             event.get("event_type")
@@ -957,6 +952,13 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 continue
             if product_filter and event.get("product") != product_filter:
                 continue
+            if rca_classification_filter:
+                if (
+                    (event.get("event_type") or "Operational Incident")
+                    == "Operational Incident"
+                    and event.get("rca_classification") != rca_classification_filter
+                ):
+                    continue
             if apply_event_type_filter and event_type_filter and event.get("event_type") not in event_type_filter:
                 continue
 
@@ -1087,6 +1089,8 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             params["pillar"] = pillar_filter
         if kind != "product" and product_filter:
             params["product"] = product_filter
+        if kind != "rca" and rca_classification_filter:
+            params["rca_classification"] = rca_classification_filter
 
         if target_tab == "incidents":
             if kind == "severity":
@@ -1141,6 +1145,14 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 "remove_link": build_remove_link("product", tab="others"),
             }
         )
+    if rca_classification_filter:
+        incident_filters.append(
+            {
+                "label": "RCA Classification",
+                "value": rca_classification_filter,
+                "remove_link": build_remove_link("rca", tab="incidents"),
+            }
+        )
     if severity_filter:
         for severity in severity_filter:
             incident_filters.append(
@@ -1184,6 +1196,8 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 params["severity"] = severity_filter
             elif severity_param_supplied:
                 params["severity"] = [""]
+            if rca_classification_filter:
+                params["rca_classification"] = rca_classification_filter
         if target_tab == "others" and event_type_filter:
             params["event_type"] = event_type_filter
         return url_for("index", **params)
@@ -1239,11 +1253,13 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         pillars=pillars,
         products=products,
         severities=severities,
+        rca_classifications=rca_classifications,
         event_types=event_types,
         products_by_pillar=products_by_pillar,
         product_pillar_map=product_pillar_map,
         pillar_filter=pillar_filter,
         product_filter=product_filter,
+        rca_classification_filter=rca_classification_filter,
         severity_filter=severity_filter,
         event_type_filter=event_type_filter,
         calendar=calendar,

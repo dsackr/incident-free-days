@@ -121,6 +121,16 @@
                             </div>
                         </label>
 
+                        <label>
+                            RCA Classification
+                            <select name="rca_classification">
+                                <option value="">All</option>
+                                {% for classification in rca_classifications %}
+                                <option value="{{ classification }}" {% if rca_classification_filter == classification %}selected{% endif %}>{{ classification }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
