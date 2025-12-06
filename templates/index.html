@@ -168,6 +168,9 @@
                 </div>
 
                 <div id="incident-calendar-export">
+                    <div class="export-title">
+                        {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
+                    </div>
                     <div class="legend incident-legend">
                         <div class="legend-gradient" aria-label="Incident intensity scale">
                             <div class="legend-gradient-bar" aria-hidden="true"></div>
@@ -345,6 +348,9 @@
                 </div>
 
                 <div id="other-calendar-export">
+                    <div class="export-title">
+                        {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
+                    </div>
                     <div class="legend">
                         <span class="legend-item">
                             <span class="legend-color legend-grey"></span> No event
