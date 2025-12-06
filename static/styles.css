@@ -95,6 +95,13 @@ h1 {
     display: block;
 }
 
+.export-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f3d75;
+    margin: 8px 0 12px;
+}
+
 .legend {
     margin-bottom: 8px;
     display: flex;
