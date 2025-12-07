@@ -244,6 +244,50 @@ class IncidentSyncTests(unittest.TestCase):
         payload = payloads[0]
         self.assertEqual(payload["rca_classification"], "Not Classified")
 
+    def test_normalize_incident_payloads_handles_value_option_rca(self):
+        api_incident = {
+            "reference": "INC-9999",
+            "severity": {"name": "Sev4"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-12-05T10:00:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {
+                        "id": "01JZ0PNKHCB3M6NX0AHPABS59D",
+                        "name": "RCA Classification",
+                        "options": [
+                            {
+                                "id": "01K239XGE8SV013XQY1GJS2V8K",
+                                "custom_field_id": "01JZ0PNKHCB3M6NX0AHPABS59D",
+                                "value": "Non-Procedural Incident",
+                                "sort_key": 40,
+                            }
+                        ],
+                    },
+                    "values": [
+                        {
+                            "value_option": {
+                                "id": "01K239XGE8SV013XQY1GJS2V8K",
+                                "custom_field_id": "01JZ0PNKHCB3M6NX0AHPABS59D",
+                                "value": "Non-Procedural Incident",
+                                "sort_key": 40,
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["rca_classification"], "Non-Procedural Incident")
+
     @mock.patch("incident_io_client.fetch_incidents")
     def test_sync_incidents_dry_run_skips_writes(self, mock_fetch_incidents):
         api_incident = {
