@@ -677,64 +677,13 @@ h1 {
     color: #b71c1c;
 }
 
-.osha-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
+.osha-preview-section {
     margin-top: 8px;
-}
-
-.osha-grid.single {
-    grid-template-columns: minmax(320px, 1fr);
-    max-width: 540px;
-}
-
-.osha-card {
-    background: #f7f9fb;
-    border: 1px solid #dde6f4;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 1px 2px rgba(15, 61, 117, 0.08);
-}
-
-.osha-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.osha-stat {
-    flex: 1;
-    min-width: 160px;
-    background: #ffffff;
-    border: 1px solid #e4e9f1;
-    border-radius: 6px;
-    padding: 12px;
-}
-
-.osha-label {
-    margin: 0 0 4px 0;
-    color: #516174;
-    font-size: 13px;
-}
-
-.osha-value {
-    margin: 0;
-    font-size: 28px;
-    font-weight: 700;
-    color: #0f3d75;
-}
-
-.osha-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 12px;
 }
 
 .osha-preview {
     width: 100%;
-    max-width: 420px;
+    max-width: 100%;
     border: 1px solid #d3dbe7;
     border-radius: 6px;
     display: block;

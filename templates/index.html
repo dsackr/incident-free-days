@@ -446,27 +446,15 @@
             </div>
             {% endif %}
 
-            <div class="osha-grid single">
-                <div class="osha-card">
-                    <h3>Preview & display</h3>
-                    <p class="helper-text">
-                        The OSHA counter updates automatically based on the latest procedural RCA Classification.
-                    </p>
-                    {% if osha_image_exists %}
-                    <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
-                    {% else %}
-                    <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
-                    {% endif %}
-
-                    <div class="osha-actions">
-                        <a class="secondary-button" href="{{ url_for('osha_display') }}" target="_blank" rel="noopener noreferrer">Open image</a>
-                        <form method="POST" action="{{ url_for('send_osha_sign') }}">
-                            <button type="submit" class="primary-button" {% if not osha_image_exists %}disabled{% endif %}>
-                                Send to E-Paper display
-                            </button>
-                        </form>
-                    </div>
-                </div>
+            <div class="osha-preview-section">
+                <p class="helper-text">
+                    The OSHA counter updates automatically based on the latest procedural RCA Classification.
+                </p>
+                {% if osha_image_exists %}
+                <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
+                {% else %}
+                <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
+                {% endif %}
             </div>
         </div>
 
