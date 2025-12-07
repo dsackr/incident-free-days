@@ -735,9 +735,18 @@ def _extract_rca_classification(api_incident, default="Not Classified"):
         if name != target_name and field_id != target_id:
             continue
 
-        first_value = (entry.get("values") or [{}])[0]
-        if isinstance(first_value, dict):
-            raw_value = first_value.get("value")
+        for value_entry in entry.get("values") or []:
+            if not isinstance(value_entry, dict):
+                continue
+
+            value_option = value_entry.get("value_option") or {}
+            raw_value = (
+                value_option.get("value")
+                or value_option.get("name")
+                or value_entry.get("value")
+                or value_entry.get("value_text")
+            )
+
             if raw_value not in (None, ""):
                 return str(raw_value)
 
