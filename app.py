@@ -27,6 +27,7 @@ OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
 OSHA_EINK_DISPLAY_IP = os.getenv("OSHA_EINK_DISPLAY_IP", "192.168.86.120")
 OSHA_EINK_DISPLAY_PORT = int(os.getenv("OSHA_EINK_DISPLAY_PORT", "5000"))
+PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
 
 # 6-color palette for E-Paper display
 OSHA_PALETTE = {
@@ -82,6 +83,88 @@ def save_osha_data(data):
 
 
 def compute_osha_state(raw_data=None):
+    return compute_osha_state_from_incidents(load_events(DATA_FILE), raw_data=raw_data)
+
+
+def _normalize_incident_number(raw_value):
+    inc_number = str(raw_value or "").strip()
+
+    if inc_number.upper().startswith("INC-"):
+        return inc_number[4:]
+
+    return inc_number
+
+
+def _infer_osha_reason(rca_classification):
+    normalized = (rca_classification or "").strip().casefold()
+
+    if "deploy" in normalized:
+        return "Deploy"
+    if "miss" in normalized:
+        return "Missed"
+    if "change" in normalized:
+        return "Change"
+
+    return "Change"
+
+
+def _procedural_incidents(incidents):
+    results = []
+
+    for incident in incidents or []:
+        classification_raw = (incident.get("rca_classification") or "").strip()
+        if not classification_raw:
+            continue
+
+        if classification_raw.casefold() in PROCEDURAL_RCA_EXCLUSIONS:
+            continue
+
+        incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
+        if not incident_date:
+            continue
+
+        reported_at = parse_datetime(incident.get("reported_at"))
+        if not reported_at:
+            reported_at = datetime.combine(incident_date, time.min)
+
+        results.append(
+            {
+                "incident": incident,
+                "classification": classification_raw,
+                "incident_date": incident_date,
+                "reported_at": reported_at,
+            }
+        )
+
+    results.sort(key=lambda entry: (entry["incident_date"], entry["reported_at"]), reverse=True)
+    return results
+
+
+def compute_osha_state_from_incidents(incidents, raw_data=None):
+    procedural = _procedural_incidents(incidents)
+
+    if procedural:
+        latest = procedural[0]
+        previous = procedural[1] if len(procedural) > 1 else None
+
+        incident_date = latest["incident_date"]
+        previous_date = previous["incident_date"] if previous else None
+
+        data = {
+            "incident_number": _normalize_incident_number(
+                latest["incident"].get("inc_number") or latest["incident"].get("id")
+            ),
+            "incident_date": incident_date.isoformat(),
+            "prior_incident_date": previous_date.isoformat() if previous_date else "",
+            "days_since": max((date.today() - incident_date).days, 0),
+            "prior_count": max((incident_date - previous_date).days, 0) if previous_date else 0,
+            "reason": _infer_osha_reason(latest["classification"]),
+            "last_reset": datetime.now().isoformat(),
+        }
+
+        save_osha_data(data)
+        return data
+
     data = dict(raw_data or load_osha_data())
 
     if data.get("incident_date"):
@@ -196,8 +279,8 @@ def display_osha_on_epaper(img_path):
         return False
 
 
-def generate_osha_sign(auto_display=False):
-    data = compute_osha_state()
+def generate_osha_sign(auto_display=False, incidents=None):
+    data = compute_osha_state_from_incidents(incidents or load_events(DATA_FILE))
 
     if not os.path.exists(OSHA_BACKGROUND_IMAGE):
         return False
@@ -1086,9 +1169,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     key_present = bool(key_mapping)
 
     all_events = incidents + other_events
-    osha_data = compute_osha_state()
-    osha_image_exists = os.path.exists(OSHA_OUTPUT_IMAGE)
     osha_background_exists = os.path.exists(OSHA_BACKGROUND_IMAGE)
+    osha_data = compute_osha_state_from_incidents(incidents)
+    if osha_background_exists:
+        generate_osha_sign(incidents=incidents)
+
+    osha_image_exists = os.path.exists(OSHA_OUTPUT_IMAGE)
     osha_status = request.args.get("osha_status")
 
     # Build product ↔ pillar relationships
@@ -1540,7 +1626,7 @@ def ioadmin():
 @app.route("/osha/display")
 def osha_display():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
-        generate_osha_sign()
+        generate_osha_sign(incidents=load_events(DATA_FILE))
 
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
         return "No OSHA sign available", 404
@@ -1551,7 +1637,7 @@ def osha_display():
 @app.route("/osha/send", methods=["POST"])
 def send_osha_sign():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
-        generate_osha_sign()
+        generate_osha_sign(incidents=load_events(DATA_FILE))
 
     status = "sent" if display_osha_on_epaper(OSHA_OUTPUT_IMAGE) else "error"
     return redirect(url_for("index", tab="osha", osha_status=status))
@@ -1559,31 +1645,7 @@ def send_osha_sign():
 
 @app.route("/osha/update", methods=["POST"])
 def update_osha_counter():
-    data = load_osha_data()
-
-    if data.get("incident_date"):
-        data["prior_incident_date"] = data.get("incident_date")
-
-    data["incident_number"] = request.form.get("incident_number", "").strip()
-    data["incident_date"] = request.form.get("incident_date", "").strip()
-    data["reason"] = request.form.get("reason", "Change")
-    data["last_reset"] = datetime.now().isoformat()
-
-    try:
-        incident_date = datetime.fromisoformat(data["incident_date"])
-        data["days_since"] = (datetime.now().date() - incident_date.date()).days
-    except (KeyError, ValueError):
-        return redirect(url_for("index", tab="osha"))
-
-    if data.get("prior_incident_date"):
-        try:
-            prior_date = datetime.fromisoformat(data["prior_incident_date"])
-            data["prior_count"] = (incident_date.date() - prior_date.date()).days
-        except ValueError:
-            data["prior_count"] = data.get("prior_count", 0)
-
-    save_osha_data(data)
-    generate_osha_sign()
+    generate_osha_sign(incidents=load_events(DATA_FILE))
 
     return redirect(url_for("index", tab="osha"))
 
