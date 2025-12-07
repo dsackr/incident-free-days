@@ -20,16 +20,19 @@ class IncidentSyncTests(unittest.TestCase):
         self.original_product_key = app.PRODUCT_KEY_FILE
         self.original_data_file = app.DATA_FILE
         self.original_other_file = app.OTHER_EVENTS_FILE
+        self.original_osha_file = app.OSHA_DATA_FILE
         app.SYNC_CONFIG_FILE = self.sync_config_file
         app.PRODUCT_KEY_FILE = os.path.join(self.temp_dir.name, "product_pillar_key.json")
         app.DATA_FILE = self.incidents_file
         app.OTHER_EVENTS_FILE = self.other_file
+        app.OSHA_DATA_FILE = os.path.join(self.temp_dir.name, "osha_data.json")
 
     def tearDown(self):
         app.SYNC_CONFIG_FILE = self.original_sync_config
         app.PRODUCT_KEY_FILE = self.original_product_key
         app.DATA_FILE = self.original_data_file
         app.OTHER_EVENTS_FILE = self.original_other_file
+        app.OSHA_DATA_FILE = self.original_osha_file
         self.temp_dir.cleanup()
 
     def test_normalize_incident_payloads_maps_core_fields(self):
@@ -563,6 +566,52 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(len(saved), 1)
         self.assertEqual(saved[0].get("severity"), "Sev1")
         self.assertEqual(saved[0].get("reported_at"), f"{today.isoformat()}T00:00:00-05:00")
+
+    def test_compute_osha_state_from_incidents_uses_latest_procedural(self):
+        today = date.today()
+        incidents = [
+            {
+                "inc_number": "INC-300",
+                "date": (today - timedelta(days=1)).isoformat(),
+                "rca_classification": "Non-Procedural Incident",
+            },
+            {
+                "inc_number": "INC-200",
+                "date": (today - timedelta(days=3)).isoformat(),
+                "rca_classification": "Deploy",
+            },
+            {
+                "inc_number": "INC-100",
+                "date": (today - timedelta(days=10)).isoformat(),
+                "rca_classification": "Change",
+            },
+        ]
+
+        state = app.compute_osha_state_from_incidents(incidents)
+
+        self.assertEqual(state["incident_number"], "200")
+        self.assertEqual(state["reason"], "Deploy")
+        self.assertEqual(state["days_since"], 3)
+        self.assertEqual(state["prior_count"], 7)
+
+    def test_compute_osha_state_from_incidents_fallbacks_to_saved_data(self):
+        today = date.today()
+        stored = {
+            "incident_number": "555",
+            "incident_date": (today - timedelta(days=4)).isoformat(),
+            "prior_incident_date": (today - timedelta(days=9)).isoformat(),
+            "reason": "Change",
+            "last_reset": "2025-01-01T00:00:00",
+        }
+
+        with open(app.OSHA_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(stored, f)
+
+        state = app.compute_osha_state_from_incidents([])
+
+        self.assertEqual(state["incident_number"], "555")
+        self.assertEqual(state["days_since"], 4)
+        self.assertEqual(state["prior_count"], 5)
 
     def test_wipe_endpoint_clears_local_files_and_sync_state(self):
         app.save_events(self.incidents_file, [{"inc_number": "INC-1", "event_type": "Operational Incident"}])

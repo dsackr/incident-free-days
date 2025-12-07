@@ -684,6 +684,11 @@ h1 {
     margin-top: 8px;
 }
 
+.osha-grid.single {
+    grid-template-columns: minmax(320px, 1fr);
+    max-width: 540px;
+}
+
 .osha-card {
     background: #f7f9fb;
     border: 1px solid #dde6f4;

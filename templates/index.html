@@ -446,71 +446,16 @@
             </div>
             {% endif %}
 
-            <div class="osha-grid">
-                <div class="osha-card">
-                    <h3>Current sign values</h3>
-                    <div class="osha-stats">
-                        <div class="osha-stat">
-                            <p class="osha-label">Days since last incident</p>
-                            <p class="osha-value">{{ osha_data.days_since }}</p>
-                        </div>
-                        <div class="osha-stat">
-                            <p class="osha-label">Previous streak</p>
-                            <p class="osha-value">{{ osha_data.prior_count }}</p>
-                        </div>
-                        <div class="osha-stat">
-                            <p class="osha-label">Current incident #</p>
-                            <p class="osha-value">{{ osha_data.incident_number }}</p>
-                        </div>
-                    </div>
-                    <p class="helper-text">Last reset: {{ osha_data.last_reset }}</p>
-                </div>
-
-                <div class="osha-card">
-                    <h3>Update OSHA counter</h3>
-                    <form class="control-form" method="POST" action="{{ url_for('update_osha_counter') }}">
-                        <div class="control-row">
-                            <label>
-                                Incident number
-                                <input
-                                    type="text"
-                                    name="incident_number"
-                                    value="{{ osha_data.incident_number }}"
-                                    placeholder="540"
-                                    required
-                                />
-                            </label>
-
-                            <label>
-                                Incident date
-                                <input
-                                    type="date"
-                                    name="incident_date"
-                                    value="{{ osha_data.incident_date[:10] if osha_data.incident_date }}"
-                                    required
-                                />
-                            </label>
-
-                            <label>
-                                Reason
-                                <select name="reason">
-                                    {% for reason in ['Change', 'Deploy', 'Missed'] %}
-                                    <option value="{{ reason }}" {% if osha_data.reason == reason %}selected{% endif %}>{{ reason }}</option>
-                                    {% endfor %}
-                                </select>
-                            </label>
-                        </div>
-
-                        <button type="submit" class="primary-button">Save and regenerate sign</button>
-                    </form>
-                </div>
-
+            <div class="osha-grid single">
                 <div class="osha-card">
                     <h3>Preview & display</h3>
+                    <p class="helper-text">
+                        The OSHA counter updates automatically based on the latest procedural RCA Classification.
+                    </p>
                     {% if osha_image_exists %}
                     <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
                     {% else %}
-                    <p class="helper-text">Save the counter to generate a preview image.</p>
+                    <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
                     {% endif %}
 
                     <div class="osha-actions">
