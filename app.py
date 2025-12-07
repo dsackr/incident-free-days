@@ -9,6 +9,7 @@ import os
 import datetime as dt
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
+import requests
 
 import incident_io_client
 
@@ -20,6 +21,22 @@ OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 DEFAULT_YEAR = 2025
+
+OSHA_DATA_FILE = os.path.join(BASE_DIR, "osha_data.json")
+OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
+OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
+OSHA_EINK_DISPLAY_IP = os.getenv("OSHA_EINK_DISPLAY_IP", "192.168.86.120")
+OSHA_EINK_DISPLAY_PORT = int(os.getenv("OSHA_EINK_DISPLAY_PORT", "5000"))
+
+# 6-color palette for E-Paper display
+OSHA_PALETTE = {
+    "black": (0, 0, 0, 0x0),
+    "white": (255, 255, 255, 0x1),
+    "yellow": (255, 255, 0, 0x2),
+    "red": (200, 80, 50, 0x3),
+    "blue": (100, 120, 180, 0x5),
+    "green": (200, 200, 80, 0x6),
+}
 
 DEFAULT_FIELD_MAPPING = {
     "inc_number": ["incident_number", "incident_id", "id", "reference", "name"],
@@ -33,6 +50,209 @@ DEFAULT_FIELD_MAPPING = {
 
 RECENT_SYNC_EVENT_LIMIT = 25
 DEFAULT_SYNC_WINDOW_DAYS = 14
+
+
+def load_osha_data():
+    if os.path.exists(OSHA_DATA_FILE):
+        try:
+            with open(OSHA_DATA_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    return {
+        "days_since": 1,
+        "prior_count": 2,
+        "incident_number": "540",
+        "incident_date": "2025-10-03",
+        "prior_incident_date": "2025-10-01",
+        "reason": "Deploy",
+        "last_reset": datetime.now().isoformat(),
+    }
+
+
+def save_osha_data(data):
+    try:
+        with open(OSHA_DATA_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except OSError:
+        pass
+
+
+def compute_osha_state(raw_data=None):
+    data = dict(raw_data or load_osha_data())
+
+    if data.get("incident_date"):
+        try:
+            incident_date = datetime.fromisoformat(str(data["incident_date"]))
+            data["days_since"] = (datetime.now().date() - incident_date.date()).days
+        except ValueError:
+            data["days_since"] = data.get("days_since", 0)
+
+    if data.get("prior_incident_date") and data.get("incident_date"):
+        try:
+            prior_date = datetime.fromisoformat(str(data["prior_incident_date"]))
+            incident_date = datetime.fromisoformat(str(data["incident_date"]))
+            data["prior_count"] = (incident_date.date() - prior_date.date()).days
+        except ValueError:
+            data["prior_count"] = data.get("prior_count", 0)
+
+    return data
+
+
+def osha_rgb_to_palette_code(r, g, b):
+    """Find closest color in 6-color palette"""
+    min_distance = float("inf")
+    closest_code = 0x1
+
+    for _color_name, (pr, pg, pb, code) in OSHA_PALETTE.items():
+        distance = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+        if distance < min_distance:
+            min_distance = distance
+            closest_code = code
+
+    return closest_code
+
+
+def convert_osha_image_to_binary(img):
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+
+    img_ratio = img.width / img.height
+    display_ratio = 800 / 480
+
+    if img_ratio > display_ratio:
+        new_height = 480
+        new_width = int(480 * img_ratio)
+    else:
+        new_width = 800
+        new_height = int(800 / img_ratio)
+
+    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    left = (new_width - 800) // 2
+    top = (new_height - 480) // 2
+    img = img.crop((left, top, left + 800, top + 480))
+
+    palette_data = [
+        0,
+        0,
+        0,
+        255,
+        255,
+        255,
+        255,
+        255,
+        0,
+        200,
+        80,
+        50,
+        100,
+        120,
+        180,
+        200,
+        200,
+        80,
+    ]
+    palette_img = Image.new("P", (1, 1))
+    palette_img.putpalette(palette_data + [0] * (256 * 3 - len(palette_data)))
+    img = img.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
+    img = img.convert("RGB")
+
+    binary_data = bytearray(192000)
+
+    for row in range(480):
+        for col in range(0, 800, 2):
+            r1, g1, b1 = img.getpixel((col, row))
+            r2, g2, b2 = img.getpixel((col + 1, row))
+
+            code1 = osha_rgb_to_palette_code(r1, g1, b1)
+            code2 = osha_rgb_to_palette_code(r2, g2, b2)
+
+            byte_index = row * 400 + col // 2
+            binary_data[byte_index] = (code1 << 4) | code2
+
+    return bytes(binary_data)
+
+
+def display_osha_on_epaper(img_path):
+    if not os.path.exists(img_path):
+        return False
+
+    try:
+        img = Image.open(img_path)
+        binary_data = convert_osha_image_to_binary(img)
+
+        response = requests.post(
+            f"http://{OSHA_EINK_DISPLAY_IP}:{OSHA_EINK_DISPLAY_PORT}/display/binary",
+            files={"file": ("sign.bin", binary_data)},
+            headers={"Connection": "keep-alive"},
+            timeout=120,
+        )
+
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def generate_osha_sign(auto_display=False):
+    data = compute_osha_state()
+
+    if not os.path.exists(OSHA_BACKGROUND_IMAGE):
+        return False
+
+    img = Image.open(OSHA_BACKGROUND_IMAGE)
+    draw = ImageDraw.Draw(img)
+
+    img_width, _ = img.size
+
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    try:
+        days_font = ImageFont.truetype(font_path, 400)
+        count_font = ImageFont.truetype(font_path, 150)
+        inc_font = ImageFont.truetype(font_path, 100)
+        check_font = ImageFont.truetype(font_path, 80)
+    except OSError:
+        days_font = count_font = inc_font = check_font = ImageFont.load_default()
+
+    days_text = str(data.get("days_since", 0))
+    days_bbox = draw.textbbox((0, 0), days_text, font=days_font)
+    days_width = days_bbox[2] - days_bbox[0]
+    days_x = (img_width - days_width) // 2
+    days_y = 160
+    draw.text((days_x, days_y), days_text, font=days_font, fill="black")
+
+    prior_text = str(data.get("prior_count", 0))
+    prior_bbox = draw.textbbox((0, 0), prior_text, font=count_font)
+    prior_width = prior_bbox[2] - prior_bbox[0]
+    prior_x = 220 - (prior_width // 2)
+    prior_y = 630
+    draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
+
+    inc_text = data.get("incident_number", "")
+    inc_bbox = draw.textbbox((0, 0), inc_text, font=inc_font)
+    inc_width = inc_bbox[2] - inc_bbox[0]
+    inc_x = (img_width // 2) - (inc_width // 2) + 70
+    inc_y = 650
+    draw.text((inc_x, inc_y), inc_text, font=inc_font, fill="white")
+
+    reason_positions = {
+        "Change": (940, 575),
+        "Deploy": (940, 645),
+        "Missed": (940, 705),
+    }
+
+    if data.get("reason") in reason_positions:
+        check_x, check_y = reason_positions[data["reason"]]
+        draw.text((check_x, check_y), "✓", font=check_font, fill="blue")
+
+    img.save(OSHA_OUTPUT_IMAGE)
+
+    if auto_display:
+        display_osha_on_epaper(OSHA_OUTPUT_IMAGE)
+
+    return True
 
 
 def load_events(path):
@@ -816,7 +1036,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
     active_tab = tab_override or request.args.get("tab", "incidents")
-    allowed_tabs = {"incidents", "others"}
+    allowed_tabs = {"incidents", "others", "osha"}
     if show_config_tab:
         allowed_tabs.add("form")
 
@@ -857,6 +1077,10 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     key_present = bool(key_mapping)
 
     all_events = incidents + other_events
+    osha_data = compute_osha_state()
+    osha_image_exists = os.path.exists(OSHA_OUTPUT_IMAGE)
+    osha_background_exists = os.path.exists(OSHA_BACKGROUND_IMAGE)
+    osha_status = request.args.get("osha_status")
 
     # Build product ↔ pillar relationships
     product_pillar_map = {k: v for k, v in key_mapping.items() if k and v}
@@ -1287,6 +1511,10 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         sync_config=sync_config,
         env_token_available=env_token_available,
         show_config_tab=show_config_tab,
+        osha_data=osha_data,
+        osha_image_exists=osha_image_exists,
+        osha_background_exists=osha_background_exists,
+        osha_status=osha_status,
     )
 
 
@@ -1298,6 +1526,57 @@ def index():
 @app.route("/ioadmin", methods=["GET"])
 def ioadmin():
     return render_dashboard(tab_override="form", show_config_tab=True)
+
+
+@app.route("/osha/display")
+def osha_display():
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        generate_osha_sign()
+
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        return "No OSHA sign available", 404
+
+    return send_file(OSHA_OUTPUT_IMAGE, mimetype="image/png")
+
+
+@app.route("/osha/send", methods=["POST"])
+def send_osha_sign():
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        generate_osha_sign()
+
+    status = "sent" if display_osha_on_epaper(OSHA_OUTPUT_IMAGE) else "error"
+    return redirect(url_for("index", tab="osha", osha_status=status))
+
+
+@app.route("/osha/update", methods=["POST"])
+def update_osha_counter():
+    data = load_osha_data()
+
+    if data.get("incident_date"):
+        data["prior_incident_date"] = data.get("incident_date")
+
+    data["incident_number"] = request.form.get("incident_number", "").strip()
+    data["incident_date"] = request.form.get("incident_date", "").strip()
+    data["reason"] = request.form.get("reason", "Change")
+    data["last_reset"] = datetime.now().isoformat()
+
+    try:
+        incident_date = datetime.fromisoformat(data["incident_date"])
+        data["days_since"] = (datetime.now().date() - incident_date.date()).days
+    except (KeyError, ValueError):
+        return redirect(url_for("index", tab="osha"))
+
+    if data.get("prior_incident_date"):
+        try:
+            prior_date = datetime.fromisoformat(data["prior_incident_date"])
+            data["prior_count"] = (incident_date.date() - prior_date.date()).days
+        except ValueError:
+            data["prior_count"] = data.get("prior_count", 0)
+
+    save_osha_data(data)
+    generate_osha_sign()
+
+    return redirect(url_for("index", tab="osha"))
 
 
 @app.route("/calendar/eink.png")
@@ -1798,4 +2077,5 @@ if __name__ == "__main__":
         summary = sync_incidents_from_api(dry_run=args.dry_run)
         print(json.dumps(summary, indent=2))
     else:
+        generate_osha_sign()
         app.run(host=args.host, port=args.port, debug=False)
