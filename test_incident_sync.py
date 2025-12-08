@@ -218,6 +218,47 @@ class IncidentSyncTests(unittest.TestCase):
         payload = payloads[0]
         self.assertEqual(payload["rca_classification"], "Process")
 
+    def test_normalize_incident_payloads_includes_client_impact_duration(self):
+        api_incident = {
+            "reference": "INC-2468",
+            "severity": {"name": "Sev3"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2025-01-10T10:00:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [{"value_catalog_entry": {"name": "Widget"}}],
+                },
+                {
+                    "custom_field": {"name": "Client Impact Duration"},
+                    "values": [{"value_seconds": 90061}],
+                },
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["client_impact_duration_seconds"], 90061)
+
+    def test_compute_event_dates_uses_client_impact_duration(self):
+        event = {
+            "event_type": "Operational Incident",
+            "reported_at": "2025-02-01T00:00:00Z",
+            "client_impact_duration_seconds": 90000,
+        }
+
+        dates = app.compute_event_dates(event, duration_enabled=True)
+
+        self.assertIn(date(2025, 2, 1), dates)
+        self.assertIn(date(2025, 2, 2), dates)
+        self.assertEqual(len(dates), 2)
+
     def test_normalize_incident_payloads_defaults_rca_when_missing_values(self):
         api_incident = {
             "reference": "INC-1234",
