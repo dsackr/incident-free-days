@@ -246,6 +246,43 @@ class IncidentSyncTests(unittest.TestCase):
         payload = payloads[0]
         self.assertEqual(payload["client_impact_duration_seconds"], 90061)
 
+    def test_normalize_incident_payloads_reads_duration_metric(self):
+        api_incident = {
+            "reference": "INC-8642",
+            "severity": {"name": "Sev2"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2025-02-10T12:00:00Z"},
+                }
+            ],
+            "duration_metrics": [
+                {
+                    "duration_metric": {
+                        "id": "01HX7EADYMMC7HK85MEY0361D1",
+                        "name": "Client Impact Duration",
+                    },
+                    "value_seconds": 1080,
+                },
+                {
+                    "duration_metric": {"name": "Incident duration"},
+                    "value_seconds": 8580,
+                },
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [{"value_catalog_entry": {"name": "Gadget"}}],
+                }
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        self.assertEqual(payload["client_impact_duration_seconds"], 1080)
+
     def test_compute_event_dates_uses_client_impact_duration(self):
         event = {
             "event_type": "Operational Incident",

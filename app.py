@@ -943,6 +943,22 @@ def _extract_rca_classification(api_incident, default="Not Classified"):
 def _extract_client_impact_duration_seconds(api_incident):
     target_name = "client impact duration"
 
+    for entry in api_incident.get("duration_metrics") or []:
+        metric = entry.get("duration_metric") or {}
+        name = (metric.get("name") or "").strip().casefold()
+
+        if name != target_name:
+            continue
+
+        for key in ("value_seconds", "value", "value_numeric", "value_integer"):
+            raw_value = entry.get(key)
+            try:
+                seconds = int(raw_value)
+            except (TypeError, ValueError):
+                continue
+
+            return max(seconds, 0)
+
     for entry in api_incident.get("custom_field_entries") or []:
         custom_field = entry.get("custom_field") or {}
         name = (custom_field.get("name") or "").strip().casefold()
