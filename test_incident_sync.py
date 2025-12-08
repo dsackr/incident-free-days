@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from unittest import mock
 
 import app
@@ -631,6 +631,33 @@ class IncidentSyncTests(unittest.TestCase):
             updated_config = json.load(f)
 
         self.assertFalse(updated_config.get("last_sync"))
+
+
+class AutoSyncTests(unittest.TestCase):
+    def test_auto_sync_due_when_never_synced(self):
+        config = {"cadence": "hourly", "token": "abc", "last_sync": {}}
+        now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+
+        self.assertTrue(app.is_auto_sync_due(config, now=now))
+
+    def test_auto_sync_skips_without_token(self):
+        config = {"cadence": "hourly", "last_sync": {}}
+        now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+
+        self.assertFalse(app.is_auto_sync_due(config, now=now))
+
+    def test_auto_sync_waits_until_interval_passes(self):
+        config = {
+            "cadence": "daily",
+            "token": "abc",
+            "last_sync": {"timestamp": "2025-01-01T10:00:00Z"},
+        }
+        now = datetime(2025, 1, 1, 15, 0, tzinfo=timezone.utc)
+
+        self.assertFalse(app.is_auto_sync_due(config, now=now))
+
+        later = datetime(2025, 1, 2, 10, 1, tzinfo=timezone.utc)
+        self.assertTrue(app.is_auto_sync_due(config, now=later))
 
 
 if __name__ == "__main__":

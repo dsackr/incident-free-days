@@ -99,6 +99,11 @@ The app can pull incidents directly from incident.io so you do not need to manua
 4. Click **Dry run mapping** to preview the first 10 normalized payloads and verify pillars/severities.
 5. Click **Import incidents** to pull all incidents in the selected window into `incidents.json`/`others.json`.
 
+### Automatic sync cadence
+- The Flask server now runs a lightweight background worker that honors your selected cadence **as long as the app process is running**. It will trigger `/sync/incidents` with the stored token/base URL/date window and update the **Last sync** status on completion.
+- To keep the worker alive between reboots, run the app under a supervisor such as the systemd unit described above; you don't need an extra cron entry.
+- If you prefer to offload scheduling, you can alternatively point an external scheduler (cron, systemd timer, Kubernetes CronJob) at `POST http://<host>:8080/sync/incidents` with the token/base URL payload. In that mode, set cadence to "off" or ignore the in-app cadence.
+
 ### Via the CLI or API
 1. Export your incident.io API token to the environment:
    ```bash
