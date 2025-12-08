@@ -91,6 +91,24 @@ document.addEventListener("DOMContentLoaded", function () {
         return formatter.format(parsed);
     };
 
+    const formatDuration = (seconds) => {
+        if (seconds === null || seconds === undefined) return null;
+
+        const totalSeconds = Number.parseInt(seconds, 10);
+        if (Number.isNaN(totalSeconds) || totalSeconds < 0) return null;
+
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+        const parts = [];
+        if (days) parts.push(`${days}d`);
+        if (hours) parts.push(`${hours}h`);
+        parts.push(`${minutes}m`);
+
+        return parts.join(" ");
+    };
+
     const renderModal = (kind, dateStr, incidents) => {
         modalDateEl.textContent = `${kind === "incidents" ? "Incidents" : "Events"} on ${dateStr}`;
 
@@ -115,6 +133,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 const extraMeta = [];
                 const reportedFormatted = formatDateTime(inc.reported_at);
                 const closedFormatted = formatDateTime(inc.closed_at);
+                const clientDurationLabel =
+                    inc.client_impact_duration_label || formatDuration(inc.client_impact_duration_seconds);
 
                 if (reportedFormatted) {
                     extraMeta.push(`Reported: ${reportedFormatted}`);
@@ -122,8 +142,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (closedFormatted) {
                     extraMeta.push(`Closed: ${closedFormatted}`);
                 }
-                if (inc.duration_seconds) {
-                    extraMeta.push(`Duration: ${inc.duration_seconds} sec`);
+                if (clientDurationLabel) {
+                    extraMeta.push(`Client impact: ${clientDurationLabel}`);
                 }
                 const extraMetaText = extraMeta.length ? ` · ${extraMeta.join(" · ")}` : "";
                 const eventType = inc.event_type ? ` · Type: ${inc.event_type}` : "";
@@ -578,6 +598,8 @@ document.addEventListener("DOMContentLoaded", function () {
         samples.forEach((sample) => {
             const normalized = sample.normalized || {};
             const row = document.createElement("tr");
+            const clientDurationDisplay =
+                normalized.client_impact_duration_label || formatDuration(normalized.client_impact_duration_seconds);
             const columns = [
                 normalized.inc_number || sample?.source?.id || "",
                 normalized.product || "",
@@ -585,7 +607,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 normalized.severity || "",
                 normalized.reported_at || "",
                 normalized.closed_at || "",
-                normalized.duration_seconds ?? "",
+                clientDurationDisplay || "",
                 normalized.event_type || "",
             ];
 

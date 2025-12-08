@@ -665,6 +665,44 @@ def normalize_severity_label(value):
     return text
 
 
+def _coerce_duration_value(raw_value):
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return 0
+
+    return max(value, 0)
+
+
+def get_client_impact_duration_seconds(event):
+    seconds = _coerce_duration_value(event.get("client_impact_duration_seconds"))
+    if seconds:
+        return seconds
+
+    seconds = _coerce_duration_value(event.get("client_impact_duration"))
+    if seconds:
+        return seconds
+
+    return 0
+
+
+def format_duration_short(seconds):
+    seconds = max(int(seconds or 0), 0)
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes or not parts:
+        parts.append(f"{minutes}m")
+
+    return " ".join(parts)
+
+
 def compute_event_dates(event, duration_enabled=False):
     """Return a list of dates covered by an event using reported/closed times."""
 
@@ -678,19 +716,20 @@ def compute_event_dates(event, duration_enabled=False):
         except (TypeError, ValueError):
             return []
 
-    if closed_at is None:
-        try:
-            duration_seconds = int(event.get("duration_seconds", 0) or 0)
-        except (TypeError, ValueError):
-            duration_seconds = 0
-
-        closed_at = reported_at + timedelta(seconds=max(duration_seconds, 0))
-
     start_date = reported_at.date()
-    end_date = max(closed_at.date(), start_date)
 
     if not duration_enabled:
         return [start_date]
+
+    if (event.get("event_type") or "Operational Incident") == "Operational Incident":
+        duration_seconds = get_client_impact_duration_seconds(event)
+        end_date = (reported_at + timedelta(seconds=duration_seconds)).date() if duration_seconds else start_date
+    else:
+        if closed_at is None:
+            duration_seconds = _coerce_duration_value(event.get("duration_seconds"))
+            closed_at = reported_at + timedelta(seconds=duration_seconds)
+
+        end_date = max(closed_at.date(), start_date)
 
     days = []
     current = start_date
@@ -901,6 +940,34 @@ def _extract_rca_classification(api_incident, default="Not Classified"):
     return default
 
 
+def _extract_client_impact_duration_seconds(api_incident):
+    target_name = "client impact duration"
+
+    for entry in api_incident.get("custom_field_entries") or []:
+        custom_field = entry.get("custom_field") or {}
+        name = (custom_field.get("name") or "").strip().casefold()
+
+        if name != target_name:
+            continue
+
+        for value_entry in entry.get("values") or []:
+            if not isinstance(value_entry, dict):
+                continue
+
+            for key in ("value_seconds", "value_integer", "value_numeric", "value"):
+                raw_value = value_entry.get(key)
+                try:
+                    seconds = int(raw_value)
+                except (TypeError, ValueError):
+                    continue
+
+                return max(seconds, 0)
+
+        return 0
+
+    return 0
+
+
 def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     mapping = mapping if mapping is not None else load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
@@ -942,6 +1009,8 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
         or inc_number
     )
 
+    client_impact_seconds = _extract_client_impact_duration_seconds(api_incident)
+
     payloads = []
     for product in products:
         resolved_pillar = resolve_pillar(
@@ -962,6 +1031,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "event_type": event_type,
                 "title": title,
                 "rca_classification": rca_classification,
+                "client_impact_duration_seconds": client_impact_seconds,
             }
         )
 
@@ -1349,6 +1419,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                     event.get("severity") == selected for selected in severity_filter
                 ):
                     continue
+
+            if (event.get("event_type") or "Operational Incident") == "Operational Incident":
+                client_duration = get_client_impact_duration_seconds(event)
+                event["client_impact_duration_seconds"] = client_duration
+                if client_duration:
+                    event["client_impact_duration_label"] = format_duration_short(client_duration)
 
             covered_dates = compute_event_dates(event, duration_enabled)
             if not covered_dates:
@@ -1938,6 +2014,7 @@ def add_incident():
             "reported_at": reported_dt.isoformat() if reported_dt else "",
             "closed_at": closed_dt.isoformat() if closed_dt else "",
             "duration_seconds": duration_seconds,
+            "client_impact_duration_seconds": duration_seconds if event_type == "Operational Incident" else 0,
             "severity": severity,
             "pillar": pillar,
             "product": product,
@@ -2034,6 +2111,7 @@ def upload_csv():
                 "reported_at": reported_dt.isoformat(),
                 "closed_at": closed_dt.isoformat() if closed_dt else "",
                 "duration_seconds": duration_seconds,
+                "client_impact_duration_seconds": duration_seconds if event_type == "Operational Incident" else 0,
                 "severity": severity,
                 "pillar": pillar,
                 "product": product,
