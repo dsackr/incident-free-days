@@ -7,6 +7,8 @@ import calendar
 import json
 import os
 import datetime as dt
+import threading
+import time as time_module
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import requests
@@ -51,6 +53,12 @@ DEFAULT_FIELD_MAPPING = {
 
 RECENT_SYNC_EVENT_LIMIT = 25
 DEFAULT_SYNC_WINDOW_DAYS = 14
+AUTO_SYNC_POLL_SECONDS = 300
+CADENCE_TO_INTERVAL = {
+    "hourly": timedelta(hours=1),
+    "daily": timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+}
 
 
 def load_osha_data():
@@ -460,6 +468,61 @@ def build_sync_config_view(raw_config):
         "last_sync_events": last_sync_raw.get("events") or [],
         "field_mapping": raw_config.get("field_mapping", DEFAULT_FIELD_MAPPING),
     }
+
+
+def _normalize_timestamp(raw_value):
+    if not raw_value:
+        return None
+
+    parsed = parse_datetime(str(raw_value))
+    if not parsed:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
+def is_auto_sync_due(config, *, now=None):
+    cadence = (config.get("cadence") or "").casefold()
+    token = config.get("token") or os.getenv("INCIDENT_IO_API_TOKEN")
+
+    if cadence not in CADENCE_TO_INTERVAL:
+        return False
+
+    if not token:
+        return False
+
+    now = now or datetime.now(timezone.utc)
+    last_sync_raw = config.get("last_sync") or {}
+    last_synced_at = _normalize_timestamp(last_sync_raw.get("timestamp"))
+
+    if not last_synced_at:
+        return True
+
+    interval = CADENCE_TO_INTERVAL[cadence]
+    return now - last_synced_at >= interval
+
+
+def auto_sync_loop(stop_event):
+    while not stop_event.is_set():
+        try:
+            config = load_sync_config()
+            if is_auto_sync_due(config):
+                sync_incidents_from_api(
+                    dry_run=False,
+                    start_date=config.get("start_date") or None,
+                    end_date=config.get("end_date") or None,
+                    token=config.get("token") or os.getenv("INCIDENT_IO_API_TOKEN"),
+                    base_url=config.get("base_url") or None,
+                    include_samples=False,
+                    field_mapping=config.get("field_mapping"),
+                )
+        except Exception as exc:  # pragma: no cover - safeguard for background loop
+            print(f"Auto-sync error: {exc}")
+        finally:
+            stop_event.wait(AUTO_SYNC_POLL_SECONDS)
 
 
 def parse_date(raw_value):
@@ -2149,4 +2212,14 @@ if __name__ == "__main__":
         print(json.dumps(summary, indent=2))
     else:
         generate_osha_sign()
-        app.run(host=args.host, port=args.port, debug=False)
+        stop_event = threading.Event()
+        sync_thread = threading.Thread(
+            target=auto_sync_loop, args=(stop_event,), daemon=True
+        )
+        sync_thread.start()
+
+        try:
+            app.run(host=args.host, port=args.port, debug=False)
+        finally:
+            stop_event.set()
+            sync_thread.join(timeout=1)
