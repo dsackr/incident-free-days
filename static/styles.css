@@ -682,12 +682,13 @@ h1 {
 }
 
 .osha-preview {
-    width: 100%;
-    max-width: 100%;
+    width: 50%;
+    max-width: 50%;
     border: 1px solid #d3dbe7;
     border-radius: 6px;
     display: block;
     background: #ffffff;
+    margin: 0 auto;
 }
 
 /* Calendar grid */
@@ -864,7 +865,6 @@ h1 {
 .incidents-table {
     border-collapse: collapse;
     width: 100%;
-    max-width: 600px;
     font-size: 13px;
 }
 
@@ -877,6 +877,54 @@ h1 {
 .incidents-table th {
     background: #fafafa;
     text-align: left;
+}
+
+.table-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.table-control-panel {
+    margin: 12px 0;
+}
+
+.table-control-row {
+    flex-wrap: wrap;
+}
+
+.table-control-row label {
+    min-width: 220px;
+}
+
+.table-scroll {
+    overflow: auto;
+    border: 1px solid #e1e7f0;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+.table-scroll .incidents-table {
+    min-width: 960px;
+    max-width: none;
+}
+
+.incidents-table th {
+    cursor: pointer;
+    user-select: none;
+}
+
+.incidents-table th[aria-sort='ascending'],
+.incidents-table th[aria-sort='descending'] {
+    background: #eef4ff;
 }
 
 /* Modal */

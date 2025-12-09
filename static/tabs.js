@@ -54,8 +54,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const productPillarMap = readJsonFromScript("product-pillar-map") || {};
     const productsByPillar = readJsonFromScript("products-by-pillar") || {};
     const allProducts = productsByPillar.__all__ || [];
-    const pillarSelect = document.querySelector("select[name='pillar']");
-    const productSelect = document.querySelector("select[name='product']");
 
     const modal = document.getElementById("incident-modal");
     const modalDateEl = document.getElementById("incident-modal-date");
@@ -251,6 +249,14 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     setupCheckboxDropdown({
+        dropdownId: "severity-dropdown-table",
+        toggleId: "severity-dropdown-toggle-table",
+        menuId: "severity-dropdown-menu-table",
+        selectionLabelId: "severity-selection-label-table",
+        inputName: "severity",
+    });
+
+    setupCheckboxDropdown({
         dropdownId: "event-type-dropdown",
         toggleId: "event-type-dropdown-toggle",
         menuId: "event-type-dropdown-menu",
@@ -258,7 +264,7 @@ document.addEventListener("DOMContentLoaded", function () {
         inputName: "event_type",
     });
 
-    const rebuildProductOptions = (allowedProducts) => {
+    const rebuildProductOptions = (productSelect, allowedProducts) => {
         if (!productSelect) return;
 
         const currentValue = productSelect.value;
@@ -283,40 +289,47 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
-    const updateProductsForPillar = () => {
-        if (!productSelect) return;
+    const setupPillarProductSync = () => {
+        const forms = document.querySelectorAll(".control-form");
 
-        const selectedPillar = pillarSelect?.value || "";
-        const allowedProducts =
-            (selectedPillar && productsByPillar[selectedPillar]) || allProducts;
+        forms.forEach((form) => {
+            const pillarSelect = form.querySelector("select[name='pillar']");
+            const productSelect = form.querySelector("select[name='product']");
 
-        rebuildProductOptions(allowedProducts);
+            if (!pillarSelect || !productSelect) return;
 
-        if (
-            productSelect.value &&
-            Array.isArray(allowedProducts) &&
-            !allowedProducts.includes(productSelect.value)
-        ) {
-            productSelect.value = "";
-        }
-    };
+            const updateProductsForPillar = () => {
+                const selectedPillar = pillarSelect?.value || "";
+                const allowedProducts =
+                    (selectedPillar && productsByPillar[selectedPillar]) || allProducts;
 
-    const syncPillarToProduct = () => {
-        if (!productSelect || !pillarSelect) return;
+                rebuildProductOptions(productSelect, allowedProducts);
 
-        const selectedProduct = productSelect.value;
-        const mappedPillar = productPillarMap[selectedProduct];
-        if (mappedPillar && pillarSelect.value !== mappedPillar) {
-            pillarSelect.value = mappedPillar;
+                if (
+                    productSelect.value &&
+                    Array.isArray(allowedProducts) &&
+                    !allowedProducts.includes(productSelect.value)
+                ) {
+                    productSelect.value = "";
+                }
+            };
+
+            const syncPillarToProduct = () => {
+                const selectedProduct = productSelect.value;
+                const mappedPillar = productPillarMap[selectedProduct];
+                if (mappedPillar && pillarSelect.value !== mappedPillar) {
+                    pillarSelect.value = mappedPillar;
+                    updateProductsForPillar();
+                }
+            };
+
+            pillarSelect.addEventListener("change", updateProductsForPillar);
+            productSelect.addEventListener("change", syncPillarToProduct);
+
             updateProductsForPillar();
-        }
+            syncPillarToProduct();
+        });
     };
-
-    pillarSelect?.addEventListener("change", updateProductsForPillar);
-    productSelect?.addEventListener("change", syncPillarToProduct);
-
-    updateProductsForPillar();
-    syncPillarToProduct();
 
     const setupAutoSubmitFilters = () => {
         const forms = document.querySelectorAll(".control-form");
@@ -337,7 +350,124 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     };
 
+    setupPillarProductSync();
+
     setupAutoSubmitFilters();
+
+    const incidentTable = document.getElementById("incident-table");
+
+    if (incidentTable) {
+        const tableBody = incidentTable.querySelector("tbody");
+        const headerCells = incidentTable.querySelectorAll("th[data-sort-key]");
+        const sortSelect = document.getElementById("incident-table-sort");
+        const sortDirection = document.getElementById("incident-table-direction");
+        const filterColumnSelect = document.getElementById("incident-table-filter-column");
+        const filterTextInput = document.getElementById("incident-table-filter-text");
+
+        const allRows = Array.from(tableBody.querySelectorAll("tr"));
+
+        const columnTypes = {
+            reported_at: "date",
+            closed_at: "date",
+            duration_seconds: "number",
+        };
+
+        const searchableKeys = [
+            "inc_number",
+            "product",
+            "pillar",
+            "severity",
+            "rca_classification",
+            "event_type",
+        ];
+
+        const normalizeValue = (key, value) => {
+            if (!value) return "";
+            if (columnTypes[key] === "date") {
+                const parsed = Date.parse(value);
+                return Number.isNaN(parsed) ? 0 : parsed;
+            }
+            if (columnTypes[key] === "number") {
+                const parsed = Number.parseInt(value, 10);
+                return Number.isNaN(parsed) ? 0 : parsed;
+            }
+
+            return value.toString().toLowerCase();
+        };
+
+        const setHeaderSortState = (key, direction) => {
+            headerCells.forEach((cell) => {
+                const cellKey = cell.getAttribute("data-sort-key");
+                if (cellKey === key) {
+                    cell.setAttribute(
+                        "aria-sort",
+                        direction === "asc" ? "ascending" : "descending"
+                    );
+                } else {
+                    cell.setAttribute("aria-sort", "none");
+                }
+            });
+        };
+
+        const applySortAndFilter = () => {
+            const sortKey = sortSelect?.value || "reported_at";
+            const direction = sortDirection?.value === "asc" ? "asc" : "desc";
+            const filterKey = filterColumnSelect?.value || "all";
+            const filterText = (filterTextInput?.value || "").trim().toLowerCase();
+
+            const filtered = allRows.filter((row) => {
+                if (!filterText) return true;
+
+                if (filterKey === "all") {
+                    return searchableKeys.some((key) => {
+                        const value = row.dataset[key] || "";
+                        return value.toString().toLowerCase().includes(filterText);
+                    });
+                }
+
+                const value = row.dataset[filterKey] || "";
+                return value.toString().toLowerCase().includes(filterText);
+            });
+
+            filtered.sort((a, b) => {
+                const aVal = normalizeValue(sortKey, a.dataset[sortKey] || "");
+                const bVal = normalizeValue(sortKey, b.dataset[sortKey] || "");
+
+                if (aVal === bVal) return 0;
+                const comparison = aVal < bVal ? -1 : 1;
+                return direction === "asc" ? comparison : -comparison;
+            });
+
+            tableBody.innerHTML = "";
+            filtered.forEach((row) => tableBody.appendChild(row));
+
+            setHeaderSortState(sortKey, direction);
+        };
+
+        const toggleSortFromHeader = (headerCell) => {
+            const key = headerCell.getAttribute("data-sort-key");
+            if (!key) return;
+
+            const currentDirection = headerCell.getAttribute("aria-sort");
+            const nextDirection = currentDirection === "ascending" ? "desc" : "asc";
+
+            if (sortSelect) sortSelect.value = key;
+            if (sortDirection) sortDirection.value = nextDirection;
+
+            applySortAndFilter();
+        };
+
+        headerCells.forEach((cell) => {
+            cell.addEventListener("click", () => toggleSortFromHeader(cell));
+        });
+
+        sortSelect?.addEventListener("change", applySortAndFilter);
+        sortDirection?.addEventListener("change", applySortAndFilter);
+        filterColumnSelect?.addEventListener("change", applySortAndFilter);
+        filterTextInput?.addEventListener("input", applySortAndFilter);
+
+        applySortAndFilter();
+    }
 
     const buildStyleString = (computed) =>
         Array.from(computed)
