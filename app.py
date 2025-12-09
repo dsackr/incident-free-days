@@ -1277,7 +1277,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
     active_tab = tab_override or request.args.get("tab", "incidents")
-    allowed_tabs = {"incidents", "others", "osha"}
+    allowed_tabs = {"incidents", "others", "osha", "table"}
     if show_config_tab:
         allowed_tabs.add("form")
 

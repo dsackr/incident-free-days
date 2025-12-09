@@ -25,6 +25,7 @@
 
         <div class="tabs">
             <button class="tab-button {% if active_tab == 'incidents' %}active{% endif %}" data-tab="incidents-tab">Incidents</button>
+            <button class="tab-button {% if active_tab == 'table' %}active{% endif %}" data-tab="incidents-table-tab">Incident Table</button>
             <button class="tab-button {% if active_tab == 'others' %}active{% endif %}" data-tab="others-tab">Other Events</button>
             <button class="tab-button {% if active_tab == 'osha' %}active{% endif %}" data-tab="osha-tab">Osha Counter</button>
             {% if show_config_tab %}
@@ -237,6 +238,230 @@
                 </div>
             </div>
 
+        </div>
+
+        <div id="incidents-table-tab" class="tab-content {% if active_tab == 'table' %}active{% endif %}">
+            <div class="table-page-header">
+                <div>
+                    <h2>Incident Table</h2>
+                    <p class="helper-text">Browse the same incidents in a sortable, filterable table.</p>
+                </div>
+                <div class="table-actions">
+                    <a
+                        class="icon-button"
+                        href="{{ url_for('index', tab='incidents', view=view_mode, year=year, month=month_selection, pillar=pillar_filter, product=product_filter, rca_classification=rca_classification_filter, severity=severity_filter) }}"
+                    >
+                        Back to calendar
+                    </a>
+                </div>
+            </div>
+
+            <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                <input type="hidden" name="year" value="{{ year }}" />
+                <input type="hidden" name="view" value="{{ view_mode }}" />
+                <input type="hidden" name="tab" value="table" />
+                {% if month_selection %}
+                <input type="hidden" name="month" value="{{ month_selection }}" />
+                {% endif %}
+                <div class="control-row">
+                    <label>
+                        Pillar
+                        <select name="pillar">
+                            <option value="">All</option>
+                            {% for pillar in pillars %}
+                            <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        Product
+                        <select name="product">
+                            <option value="">All</option>
+                            {% for product in products %}
+                            <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        Severity
+                        <div class="dropdown severity-dropdown" id="severity-dropdown-table">
+                            <button
+                                class="dropdown-toggle"
+                                type="button"
+                                id="severity-dropdown-toggle-table"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                            >
+                                <span id="severity-selection-label-table">
+                                    {% if severity_filter %}
+                                        {{ severity_filter | join(', ') }}
+                                    {% else %}
+                                        All
+                                    {% endif %}
+                                </span>
+                                <span aria-hidden="true">▾</span>
+                            </button>
+                            <div class="dropdown-menu" id="severity-dropdown-menu-table" role="menu">
+                                {% for severity in severities %}
+                                <label class="checkbox-option">
+                                    <input
+                                        type="checkbox"
+                                        name="severity"
+                                        value="{{ severity }}"
+                                        {% if severity in severity_filter %}checked{% endif %}
+                                    />
+                                    {{ severity }}
+                                </label>
+                                {% endfor %}
+                                <p class="helper-text small">Select one or more severities to display.</p>
+                            </div>
+                        </div>
+                    </label>
+
+                    <label>
+                        RCA Classification
+                        <select name="rca_classification">
+                            <option value="">All</option>
+                            {% for classification in rca_classifications %}
+                            <option value="{{ classification }}" {% if rca_classification_filter == classification %}selected{% endif %}>{{ classification }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </form>
+
+            <div class="filter-summary">
+                {% if incident_filters %}
+                    <span class="filter-summary-label">Current filters:</span>
+                    <div class="filter-chip-row">
+                        {% for active_filter in incident_filters %}
+                            <a class="filter-chip removable" href="{{ active_filter.remove_link }}&tab=table">
+                                <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                                <span class="filter-chip-close" aria-hidden="true">×</span>
+                                <span class="sr-only">Remove {{ active_filter.label }} filter</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <span class="filter-summary-label">Current filters: All</span>
+                {% endif %}
+            </div>
+
+            <div class="incident-metrics">
+                <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
+                <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
+            </div>
+
+            <div class="table-control-panel">
+                <div class="control-row table-control-row">
+                    <label>
+                        Sort by
+                        <select id="incident-table-sort" aria-label="Sort incidents by column">
+                            <option value="reported_at" selected>Reported at</option>
+                            <option value="inc_number">Incident</option>
+                            <option value="product">Product</option>
+                            <option value="pillar">Pillar</option>
+                            <option value="severity">Severity</option>
+                            <option value="rca_classification">RCA Classification</option>
+                            <option value="closed_at">Closed at</option>
+                            <option value="duration_seconds">Client impact duration</option>
+                            <option value="event_type">Type</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Direction
+                        <select id="incident-table-direction" aria-label="Sort direction">
+                            <option value="desc" selected>Newest / highest first</option>
+                            <option value="asc">Oldest / lowest first</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Filter column
+                        <select id="incident-table-filter-column" aria-label="Filter incidents by column">
+                            <option value="all" selected>All columns</option>
+                            <option value="inc_number">Incident</option>
+                            <option value="product">Product</option>
+                            <option value="pillar">Pillar</option>
+                            <option value="severity">Severity</option>
+                            <option value="rca_classification">RCA Classification</option>
+                            <option value="event_type">Type</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Filter text
+                        <input
+                            type="text"
+                            id="incident-table-filter-text"
+                            placeholder="Search within the selected column"
+                            aria-label="Filter text"
+                        />
+                    </label>
+                </div>
+            </div>
+
+            <div class="table-scroll">
+                <table class="incidents-table" id="incident-table">
+                    <thead>
+                        <tr>
+                            <th data-sort-key="inc_number" aria-sort="none">Incident</th>
+                            <th data-sort-key="product" aria-sort="none">Product</th>
+                            <th data-sort-key="pillar" aria-sort="none">Pillar</th>
+                            <th data-sort-key="severity" aria-sort="none">Severity</th>
+                            <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
+                            <th data-sort-key="reported_at" aria-sort="descending">Reported at</th>
+                            <th data-sort-key="closed_at" aria-sort="none">Closed at</th>
+                            <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
+                            <th data-sort-key="event_type" aria-sort="none">Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for incident in incidents %}
+                        {% set incident_id = incident.inc_number or incident.id or '' %}
+                        {% set incident_url_id = incident_id.replace('INC-', '') if incident_id else '' %}
+                        {% set duration_label = incident.client_impact_duration_label or incident.client_impact_duration_seconds %}
+                        <tr
+                            data-inc_number="{{ incident_id }}"
+                            data-product="{{ incident.product or '' }}"
+                            data-pillar="{{ incident.pillar or '' }}"
+                            data-severity="{{ incident.severity or '' }}"
+                            data-rca_classification="{{ incident.rca_classification or '' }}"
+                            data-reported_at="{{ incident.reported_at or incident.date or '' }}"
+                            data-closed_at="{{ incident.closed_at or '' }}"
+                            data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
+                            data-event_type="{{ incident.event_type or '' }}"
+                        >
+                            <td>
+                                {% if incident_id %}
+                                    <a
+                                        href="https://app.incident.io/myfrontline/incidents/{{ incident_url_id or incident_id }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="incident-link"
+                                    >
+                                        {{ incident.inc_number or incident.id }}
+                                    </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ incident.product or '—' }}</td>
+                            <td>{{ incident.pillar or '—' }}</td>
+                            <td>{{ incident.severity or '—' }}</td>
+                            <td>{{ incident.rca_classification or '—' }}</td>
+                            <td>{{ incident.reported_at or incident.date or '—' }}</td>
+                            <td>{{ incident.closed_at or '—' }}</td>
+                            <td>{{ duration_label or '—' }}</td>
+                            <td>{{ incident.event_type or 'Operational Incident' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div id="others-tab" class="tab-content {% if active_tab == 'others' %}active{% endif %}">
