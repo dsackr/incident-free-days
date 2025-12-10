@@ -1011,3 +1011,135 @@ h1 {
     color: #516174;
     font-size: 13px;
 }
+
+.graph-card {
+    background: #f8fafc;
+    border: 1px solid #d9e5f4;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 16px rgba(15, 61, 117, 0.05);
+}
+
+.graph-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.graph-title {
+    margin: 0;
+    color: #0f3d75;
+}
+
+.graph-legend .legend-item {
+    font-size: 13px;
+}
+
+.graph-legend .legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: none;
+}
+
+.graph-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.graph-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    align-items: center;
+    gap: 8px;
+}
+
+.graph-axis {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #4b5563;
+}
+
+.graph-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.graph-bar {
+    display: grid;
+    grid-template-columns: repeat(31, minmax(14px, 1fr));
+    gap: 2px;
+}
+
+.axis-days {
+    font-size: 11px;
+    color: #4b5563;
+}
+
+.axis-day {
+    text-align: center;
+    padding: 2px 0;
+}
+
+.month-label {
+    font-weight: 600;
+    color: #111827;
+}
+
+.axis-label {
+    font-size: 12px;
+    color: #4b5563;
+}
+
+.day-cell {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 3px;
+    border: 1px solid #d1d5db;
+    background: #e5e7eb;
+}
+
+.day-cell.status-no-incidents {
+    background: #2e7d32;
+    border-color: #1f5b24;
+}
+
+.day-cell.status-non-procedural {
+    background: #d32f2f;
+    border-color: #9a1f1f;
+}
+
+.day-cell.status-missing-task {
+    background: #f6c744;
+    border-color: #d9a821;
+}
+
+.day-cell.status-deploy {
+    background: #8a4dd0;
+    border-color: #6d3aa8;
+}
+
+.day-cell.status-change {
+    background: #f28c38;
+    border-color: #d86f1b;
+}
+
+.day-cell.status-other {
+    background: #60a5fa;
+    border-color: #3b82f6;
+}
+
+.day-cell.status-future,
+.day-cell.status-not-in-month {
+    background: #ffffff;
+    border-style: dashed;
+    border-color: #d1d5db;
+}
