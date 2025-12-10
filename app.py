@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, render_template, request, redirect, send_file, url_for
 import re
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 import csv
@@ -605,6 +606,78 @@ def parse_datetime(raw_value):
             continue
 
     return None
+
+
+def normalize_rca_category(rca_value):
+    normalized = (rca_value or "").strip().casefold()
+
+    if "non-procedural" in normalized:
+        return "non-procedural"
+    if "missing" in normalized and "task" in normalized:
+        return "missing-task"
+    if "deploy" in normalized:
+        return "deploy"
+    if "change" in normalized:
+        return "change"
+    if normalized:
+        return "other"
+
+    return "unknown"
+
+
+def build_incident_rca_rows(incidents, year):
+    today = date.today()
+    events_by_day = defaultdict(list)
+
+    for incident in incidents:
+        incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
+        if not incident_date:
+            continue
+
+        events_by_day[incident_date].append(incident)
+
+    priority = [
+        "non-procedural",
+        "missing-task",
+        "deploy",
+        "change",
+        "other",
+        "unknown",
+    ]
+
+    month_rows = []
+
+    for month in range(1, 13):
+        _, days_in_month = calendar.monthrange(year, month)
+        cells = []
+        for day in range(1, 32):
+            if day > days_in_month:
+                cells.append({"day": day, "status": "not-in-month", "label": ""})
+                continue
+
+            day_date = date(year, month, day)
+
+            if day_date > today:
+                cells.append({"day": day, "status": "future", "label": day_date.isoformat()})
+                continue
+
+            incidents_for_day = events_by_day.get(day_date, [])
+            if not incidents_for_day:
+                cells.append({"day": day, "status": "no-incidents", "label": day_date.isoformat()})
+                continue
+
+            classifications = [normalize_rca_category(inc.get("rca_classification")) for inc in incidents_for_day]
+            counts = Counter(classifications)
+            primary = min(classifications, key=lambda value: priority.index(value) if value in priority else len(priority))
+
+            details = ", ".join(f"{counts[name]} {name}" for name in priority if counts.get(name))
+            label = f"{calendar.month_name[month]} {day}: {details}" if details else day_date.isoformat()
+
+            cells.append({"day": day, "status": primary, "label": label})
+
+        month_rows.append({"month": month, "label": calendar.month_name[month], "cells": cells})
+
+    return month_rows
 
 
 def format_sync_timestamp(raw_value, tz_name="America/New_York"):
@@ -1765,6 +1838,41 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_image_exists=osha_image_exists,
         osha_background_exists=osha_background_exists,
         osha_status=osha_status,
+    )
+
+
+@app.route("/graphs", methods=["GET"])
+def graphs_view():
+    year_param = request.args.get("year")
+
+    try:
+        year = int(year_param) if year_param else DEFAULT_YEAR
+    except ValueError:
+        year = DEFAULT_YEAR
+
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+
+    month_rows = build_incident_rca_rows(incidents, year)
+
+    legend = [
+        {"status": "no-incidents", "label": "No incidents (green)"},
+        {"status": "non-procedural", "label": "Non-procedural (red)"},
+        {"status": "missing-task", "label": "Missing task (yellow)"},
+        {"status": "deploy", "label": "Deploy (purple)"},
+        {"status": "change", "label": "Change (orange)"},
+        {"status": "other", "label": "Other classification"},
+        {"status": "future", "label": "Future day"},
+    ]
+
+    return render_template(
+        "graphs.html",
+        year=year,
+        month_rows=month_rows,
+        legend=legend,
     )
 
 
