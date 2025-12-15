@@ -9,7 +9,10 @@
     <div class="page">
         <div class="page-header">
             <h1>{{ year }} Incident RCA Graphs</h1>
-            <a class="admin-link" href="{{ url_for('index') }}">Back to Dashboard</a>
+            <div class="header-links">
+                <a class="admin-link" href="{{ url_for('stats_view') }}">Stats</a>
+                <a class="admin-link" href="{{ url_for('index') }}">Back to Dashboard</a>
+            </div>
         </div>
 
         <form class="control-form" method="GET" action="{{ url_for('graphs_view') }}">

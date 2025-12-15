@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ year }} Incident Stats (YTD)</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+    <div class="page">
+        <div class="page-header">
+            <h1>{{ year }} Incident Stats (YTD)</h1>
+            <div class="header-links">
+                <a class="admin-link" href="{{ url_for('index') }}">Dashboard</a>
+                <a class="admin-link" href="{{ url_for('graphs_view') }}">Graphs</a>
+            </div>
+        </div>
+
+        <form class="control-form" method="GET" action="{{ url_for('stats_view') }}">
+            <div class="control-row">
+                <label>
+                    Year
+                    <select name="year">
+                        {% for option_year in available_years %}
+                        <option value="{{ option_year }}" {% if option_year == year %}selected{% endif %}>{{ option_year }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    Pillar
+                    <select name="pillar">
+                        <option value="">All</option>
+                        {% for pillar in pillars %}
+                        <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    Product
+                    <select name="product">
+                        <option value="">All</option>
+                        {% for product in products %}
+                        <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <div class="checkbox-group">
+                    <span class="field-label">Severities</span>
+                    <div class="checkbox-row">
+                        {% for value in severity_options %}
+                        <label class="checkbox-inline">
+                            <input
+                                type="checkbox"
+                                name="severity"
+                                value="{{ value }}"
+                                {% if value in severity_filter %}checked{% endif %}
+                            />
+                            Sev {{ value }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="control-actions">
+                    <button type="submit" class="primary-button">Update</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="filter-summary">
+            {% if selected_filters %}
+            <span class="filter-summary-label">Current filters:</span>
+            <div class="filter-chip-row">
+                {% for active_filter in selected_filters %}
+                <span class="filter-chip">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <span class="filter-summary-label">Current filters: All</span>
+            {% endif %}
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <p class="stat-label">Total incidents (selected severities)</p>
+                <p class="stat-value">{{ total_incidents }}</p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Self-inflicted incidents</p>
+                <p class="stat-value">{{ classification_counts.self_inflicted }}</p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Non-procedural incidents</p>
+                <p class="stat-value">{{ classification_counts.non_procedural }}</p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Unknown RCA classification</p>
+                <p class="stat-value">{{ classification_counts.unknown }}</p>
+            </div>
+            <div class="stat-card highlight">
+                <p class="stat-label">% self-inflicted</p>
+                <p class="stat-value">{{ percent_self_inflicted }}%</p>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-card-header">
+                <div>
+                    <h2>Severity totals by month (YTD)</h2>
+                    <p class="helper-text">Counts update with the selected severities, pillar, product, and year.</p>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="incidents-table stats-table">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            {% for month in month_labels %}
+                            <th>{{ month }}</th>
+                            {% endfor %}
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in severity_rows %}
+                        <tr>
+                            <td>{{ row.label }}</td>
+                            {% for value in row.months %}
+                            <td>{{ value }}</td>
+                            {% endfor %}
+                            <td class="table-total">{{ row.total }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
