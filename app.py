@@ -680,6 +680,39 @@ def build_incident_rca_rows(incidents, year):
     return month_rows
 
 
+def _build_product_pillar_maps(events, mapping=None):
+    mapping = mapping if mapping is not None else load_product_key()
+    product_pillar_map = {k: v for k, v in (mapping or {}).items() if k}
+
+    for event in events:
+        product = (event.get("product") or "").strip()
+        pillar = (event.get("pillar") or "").strip()
+
+        if not product:
+            continue
+
+        if not pillar:
+            pillar = resolve_pillar(product, mapping=mapping)
+
+        if pillar:
+            product_pillar_map.setdefault(product, pillar)
+        elif product not in product_pillar_map:
+            product_pillar_map[product] = None
+
+    products_by_pillar = {}
+    for product, pillar in product_pillar_map.items():
+        if pillar is None:
+            continue
+        products_by_pillar.setdefault(pillar, set()).add(product)
+
+    products_by_pillar = {pillar: sorted(values) for pillar, values in products_by_pillar.items()}
+    products_by_pillar["__all__"] = sorted(product_pillar_map.keys())
+
+    pillars = sorted({value for value in product_pillar_map.values() if value})
+
+    return product_pillar_map, products_by_pillar, pillars
+
+
 def format_sync_timestamp(raw_value, tz_name="America/New_York"):
     if not raw_value:
         return ""
@@ -1879,6 +1912,157 @@ def graphs_view():
 @app.route("/", methods=["GET"])
 def index():
     return render_dashboard()
+
+
+@app.route("/stats", methods=["GET"])
+def stats_view():
+    today = date.today()
+    year_param = request.args.get("year")
+    pillar_filter = request.args.get("pillar") or None
+    product_filter = request.args.get("product") or None
+
+    severity_options = ["1", "2", "3", "6"]
+    severity_params = [value for value in request.args.getlist("severity") if value]
+    severity_filter = [value for value in severity_params if value in severity_options]
+    if not severity_filter:
+        severity_filter = ["1", "2", "3"]
+
+    try:
+        year = int(year_param) if year_param else today.year
+    except ValueError:
+        year = today.year
+
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+
+    key_mapping = load_product_key()
+    product_pillar_map, products_by_pillar, pillars = _build_product_pillar_maps(
+        incidents, mapping=key_mapping
+    )
+    products = products_by_pillar.get("__all__", [])
+
+    if pillar_filter:
+        products = products_by_pillar.get(pillar_filter, [])
+        if product_filter and product_filter not in products:
+            product_filter = None
+
+    available_years = sorted(
+        {
+            parsed_date.year
+            for parsed_date in (
+                parse_date(inc.get("date") or inc.get("reported_at")) for inc in incidents
+            )
+            if parsed_date
+        }
+    )
+    if year not in available_years:
+        available_years.append(year)
+        available_years = sorted(available_years)
+
+    start_date = date(year, 1, 1)
+    end_date = date(year, 12, 31) if year != today.year else today
+
+    filtered_incidents = []
+    for incident in incidents:
+        incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
+        if not incident_date or incident_date < start_date or incident_date > end_date:
+            continue
+
+        product = (incident.get("product") or "").strip()
+        pillar = (incident.get("pillar") or "").strip() or resolve_pillar(
+            product, mapping=key_mapping
+        )
+
+        if pillar_filter and pillar != pillar_filter:
+            continue
+        if product_filter and product != product_filter:
+            continue
+
+        severity_value = normalize_severity_label(incident.get("severity"))
+        if severity_filter and severity_value not in severity_filter:
+            continue
+
+        filtered_incidents.append(
+            {
+                "raw": incident,
+                "date": incident_date,
+                "severity": severity_value,
+            }
+        )
+
+    classification_counts = {"self_inflicted": 0, "non_procedural": 0, "unknown": 0}
+    severity_month_counts = {value: [0] * 12 for value in severity_options}
+
+    for entry in filtered_incidents:
+        incident = entry["raw"]
+        classification_raw = (incident.get("rca_classification") or "").strip()
+
+        if not classification_raw:
+            classification_counts["unknown"] += 1
+        else:
+            normalized_classification = classification_raw.casefold()
+            if normalized_classification == "non-procedural incident":
+                classification_counts["non_procedural"] += 1
+            elif normalized_classification == "not classified":
+                classification_counts["unknown"] += 1
+            elif normalized_classification in PROCEDURAL_RCA_EXCLUSIONS:
+                classification_counts["unknown"] += 1
+            else:
+                classification_counts["self_inflicted"] += 1
+
+        sev_value = entry["severity"]
+        if sev_value in severity_month_counts:
+            month_index = entry["date"].month - 1
+            severity_month_counts[sev_value][month_index] += 1
+
+    severity_totals = {key: sum(months) for key, months in severity_month_counts.items()}
+    total_incidents = len(filtered_incidents)
+    percent_self_inflicted = (
+        round((classification_counts["self_inflicted"] / total_incidents) * 100, 1)
+        if total_incidents
+        else 0
+    )
+
+    month_labels = [calendar.month_abbr[idx] for idx in range(1, 13)]
+    severity_rows = [
+        {
+            "label": f"Sev {value}",
+            "months": severity_month_counts[value],
+            "total": severity_totals[value],
+        }
+        for value in severity_options
+    ]
+
+    selected_filters = []
+    if pillar_filter:
+        selected_filters.append({"label": "Pillar", "value": pillar_filter})
+    if product_filter:
+        selected_filters.append({"label": "Product", "value": product_filter})
+    if severity_filter:
+        selected_filters.append(
+            {"label": "Severity", "value": ", ".join(f"Sev {s}" for s in severity_filter)}
+        )
+
+    return render_template(
+        "stats.html",
+        year=year,
+        available_years=available_years,
+        pillars=pillars,
+        products=products,
+        pillar_filter=pillar_filter,
+        product_filter=product_filter,
+        severity_filter=severity_filter,
+        severity_options=severity_options,
+        classification_counts=classification_counts,
+        total_incidents=total_incidents,
+        percent_self_inflicted=percent_self_inflicted,
+        month_labels=month_labels,
+        severity_rows=severity_rows,
+        selected_filters=selected_filters,
+    )
 
 
 @app.route("/ioadmin", methods=["GET"])
