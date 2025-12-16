@@ -946,6 +946,17 @@ h1 {
     font-weight: 700;
 }
 
+.stats-table .excluded-severity {
+    background: #f1f5f9;
+    color: #6b7280;
+}
+
+.stats-table .total-row td {
+    background: #f8fbff;
+    font-weight: 700;
+    border-top: 2px solid #d8e6fd;
+}
+
 .table-card {
     background: #ffffff;
     border: 1px solid #e1e7f0;
