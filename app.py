@@ -1965,8 +1965,27 @@ def stats_view():
     start_date = date(year, 1, 1)
     end_date = date(year, 12, 31) if year != today.year else today
 
-    filtered_incidents = []
-    severity_agnostic_incidents = []
+    filtered_incidents = {}
+    severity_agnostic_incidents = {}
+
+    def _incident_unique_key(incident):
+        inc_number = _normalize_incident_number(
+            incident.get("inc_number")
+            or incident.get("id")
+            or incident.get("reference")
+            or incident.get("name")
+        )
+
+        if inc_number:
+            return inc_number
+
+        return str(
+            incident.get("id")
+            or incident.get("name")
+            or incident.get("reference")
+            or incident.get("inc_number")
+            or ""
+        )
 
     for incident in incidents:
         incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
@@ -1993,17 +2012,19 @@ def stats_view():
             "severity": severity_value,
         }
 
-        severity_agnostic_incidents.append(entry)
+        unique_key = _incident_unique_key(incident)
+
+        severity_agnostic_incidents.setdefault(unique_key, entry)
 
         if severity_filter and severity_value not in severity_filter:
             continue
 
-        filtered_incidents.append(entry)
+        filtered_incidents.setdefault(unique_key, entry)
 
     classification_counts = {"self_inflicted": 0, "non_procedural": 0, "unknown": 0}
     severity_month_counts = {value: [0] * 12 for value in severity_options}
 
-    for entry in filtered_incidents:
+    for entry in filtered_incidents.values():
         incident = entry["raw"]
         classification_raw = (incident.get("rca_classification") or "").strip()
 
@@ -2020,7 +2041,7 @@ def stats_view():
             else:
                 classification_counts["self_inflicted"] += 1
 
-    for entry in severity_agnostic_incidents:
+    for entry in severity_agnostic_incidents.values():
         sev_value = entry["severity"]
         if sev_value in severity_month_counts:
             month_index = entry["date"].month - 1
