@@ -1925,7 +1925,7 @@ def stats_view():
     severity_params = [value for value in request.args.getlist("severity") if value]
     severity_filter = [value for value in severity_params if value in severity_options]
     if not severity_filter:
-        severity_filter = ["1", "2", "3"]
+        severity_filter = severity_options
 
     try:
         year = int(year_param) if year_param else today.year
@@ -1966,6 +1966,8 @@ def stats_view():
     end_date = date(year, 12, 31) if year != today.year else today
 
     filtered_incidents = []
+    severity_agnostic_incidents = []
+
     for incident in incidents:
         incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
         if not incident_date or incident_date < start_date or incident_date > end_date:
@@ -1982,16 +1984,21 @@ def stats_view():
             continue
 
         severity_value = normalize_severity_label(incident.get("severity"))
+        if severity_value not in severity_options:
+            continue
+
+        entry = {
+            "raw": incident,
+            "date": incident_date,
+            "severity": severity_value,
+        }
+
+        severity_agnostic_incidents.append(entry)
+
         if severity_filter and severity_value not in severity_filter:
             continue
 
-        filtered_incidents.append(
-            {
-                "raw": incident,
-                "date": incident_date,
-                "severity": severity_value,
-            }
-        )
+        filtered_incidents.append(entry)
 
     classification_counts = {"self_inflicted": 0, "non_procedural": 0, "unknown": 0}
     severity_month_counts = {value: [0] * 12 for value in severity_options}
@@ -2013,12 +2020,21 @@ def stats_view():
             else:
                 classification_counts["self_inflicted"] += 1
 
+    for entry in severity_agnostic_incidents:
         sev_value = entry["severity"]
         if sev_value in severity_month_counts:
             month_index = entry["date"].month - 1
             severity_month_counts[sev_value][month_index] += 1
 
     severity_totals = {key: sum(months) for key, months in severity_month_counts.items()}
+    totals_by_month = [
+        sum(
+            severity_month_counts[sev][month_index]
+            for sev in severity_options
+            if sev in severity_filter
+        )
+        for month_index in range(12)
+    ]
     total_incidents = len(filtered_incidents)
     percent_self_inflicted = (
         round((classification_counts["self_inflicted"] / total_incidents) * 100, 1)
@@ -2032,9 +2048,21 @@ def stats_view():
             "label": f"Sev {value}",
             "months": severity_month_counts[value],
             "total": severity_totals[value],
+            "included_in_totals": value in severity_filter,
+            "is_total": False,
         }
         for value in severity_options
     ]
+
+    severity_rows.append(
+        {
+            "label": "Total",
+            "months": totals_by_month,
+            "total": sum(totals_by_month),
+            "included_in_totals": True,
+            "is_total": True,
+        }
+    )
 
     selected_filters = []
     if pillar_filter:

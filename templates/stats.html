@@ -125,12 +125,12 @@
                     </thead>
                     <tbody>
                         {% for row in severity_rows %}
-                        <tr>
-                            <td>{{ row.label }}</td>
+                        <tr class="{% if row.is_total %}total-row{% endif %}">
+                            <td class="{% if not row.included_in_totals and not row.is_total %}excluded-severity{% endif %}">{{ row.label }}</td>
                             {% for value in row.months %}
-                            <td>{{ value }}</td>
+                            <td class="{% if row.is_total %}table-total{% elif not row.included_in_totals %}excluded-severity{% endif %}">{{ value }}</td>
                             {% endfor %}
-                            <td class="table-total">{{ row.total }}</td>
+                            <td class="table-total{% if not row.included_in_totals and not row.is_total %} excluded-severity{% endif %}">{{ row.total }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
