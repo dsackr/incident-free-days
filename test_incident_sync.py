@@ -711,6 +711,71 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertFalse(updated_config.get("last_sync"))
 
 
+class StatsViewTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+
+        self.incident_path = os.path.join(self.temp_dir.name, "incidents.json")
+        self.product_key_path = os.path.join(self.temp_dir.name, "product_pillar_key.json")
+
+        self.original_data_file = app.DATA_FILE
+        self.original_product_key_file = app.PRODUCT_KEY_FILE
+
+        app.DATA_FILE = self.incident_path
+        app.PRODUCT_KEY_FILE = self.product_key_path
+
+        self.addCleanup(self._restore_paths)
+
+        with open(self.product_key_path, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+
+    def _restore_paths(self):
+        app.DATA_FILE = self.original_data_file
+        app.PRODUCT_KEY_FILE = self.original_product_key_file
+
+    def test_stats_view_counts_unique_incidents(self):
+        incidents = [
+            {
+                "inc_number": "INC-100",
+                "date": "2025-01-10",
+                "reported_at": "2025-01-10T12:00:00Z",
+                "severity": "Sev 1",
+                "product": "Product A",
+                "pillar": "Pillar X",
+                "rca_classification": "Code",
+            },
+            {
+                "inc_number": "INC-100",
+                "date": "2025-01-10",
+                "reported_at": "2025-01-10T12:00:00Z",
+                "severity": "Sev 1",
+                "product": "Product B",
+                "pillar": "Pillar Y",
+                "rca_classification": "Code",
+            },
+        ]
+
+        with open(self.incident_path, "w", encoding="utf-8") as f:
+            json.dump(incidents, f)
+
+        with app.app.test_request_context("/stats?year=2025"):
+            with mock.patch("app.render_template") as render_template_mock:
+                render_template_mock.return_value = "rendered"
+
+                result = app.stats_view()
+
+        self.assertEqual(result, "rendered")
+        render_template_mock.assert_called_once()
+        _, kwargs = render_template_mock.call_args
+
+        self.assertEqual(kwargs["total_incidents"], 1)
+        self.assertEqual(
+            kwargs["classification_counts"],
+            {"self_inflicted": 1, "non_procedural": 0, "unknown": 0},
+        )
+
+
 class AutoSyncTests(unittest.TestCase):
     def test_auto_sync_due_when_never_synced(self):
         config = {"cadence": "hourly", "token": "abc", "last_sync": {}}
