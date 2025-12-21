@@ -3,6 +3,12 @@ from flask import Flask, jsonify, redirect, render_template, request, send_file,
 import os
 import json
 import threading
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 import app as main_app
 
