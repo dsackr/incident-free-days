@@ -1,11 +1,67 @@
+import atexit
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 import os
 import json
 import threading
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 import app as main_app
 
-osha_app = Flask(__name__)
+osha_app = Flask(
+    __name__, static_folder="static", template_folder="templates"
+)
+# Alias used by `flask --app osha run`
+app = osha_app
+
+_stop_event = threading.Event()
+_sync_thread = None
+
+
+def _start_background_tasks():
+    """Start the OSHA auto-sync loop exactly once."""
+
+    global _sync_thread
+
+    if _sync_thread and _sync_thread.is_alive():
+        return
+
+    if _stop_event.is_set():
+        _stop_event.clear()
+
+    # Ensure the initial sign is available before serving requests
+    main_app.generate_osha_sign()
+
+    _sync_thread = threading.Thread(
+        target=main_app.auto_sync_loop, args=(_stop_event,), daemon=True
+    )
+    _sync_thread.start()
+
+
+def _stop_background_tasks():
+    if not _sync_thread:
+        return
+
+    _stop_event.set()
+    _sync_thread.join(timeout=1)
+    if not _sync_thread.is_alive():
+        globals()["_sync_thread"] = None
+
+
+atexit.register(_stop_background_tasks)
+
+
+# Flask 3.x removed the before_first_request decorator; register a guarded hook
+# that starts the background sync thread the first time a request is handled.
+def _ensure_background_tasks():
+    _start_background_tasks()
+
+
+osha_app.before_request(_ensure_background_tasks)
 
 
 @osha_app.route("/")
@@ -284,13 +340,9 @@ if __name__ == "__main__":
             status = main_app.send_osha_to_any_epaper(main_app.OSHA_OUTPUT_IMAGE)
             print(json.dumps({"status": "sent" if status else "error"}, indent=2))
     else:
-        main_app.generate_osha_sign()
-        stop_event = threading.Event()
-        sync_thread = threading.Thread(target=main_app.auto_sync_loop, args=(stop_event,), daemon=True)
-        sync_thread.start()
+        _start_background_tasks()
 
         try:
             osha_app.run(host=args.host, port=args.port, debug=False)
         finally:
-            stop_event.set()
-            sync_thread.join(timeout=1)
+            _stop_background_tasks()
