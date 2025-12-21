@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OSHA Counter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <script src="{{ url_for('static', filename='tabs.js') }}" defer></script>
+</head>
+<body>
+    <header class="site-header" aria-label="Header">
+        <h1>OSHA Counter Dashboard</h1>
+        <div class="tab-buttons" role="tablist" aria-label="Dashboard navigation">
+            <button class="tab-button {% if active_tab == 'osha' %}active{% endif %}" data-tab="osha-tab" role="tab">
+                OSHA Counter
+            </button>
+            <button class="tab-button {% if active_tab == 'form' %}active{% endif %}" data-tab="form-tab" role="tab">
+                Configuration
+            </button>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <div id="osha-tab" class="tab-content {% if active_tab == 'osha' %}active{% endif %}">
+            <h2>OSHA Counter</h2>
+
+            {% if osha_status == 'sent' %}
+            <div class="notice success">OSHA sign sent to the E-Paper display.</div>
+            {% elif osha_status == 'error' %}
+            <div class="notice error">Unable to send the OSHA sign to the E-Paper display.</div>
+            {% endif %}
+
+            {% if not osha_background_exists %}
+            <div class="notice warning">
+                Upload <code>static/background.png</code> to generate the OSHA counter sign image.
+            </div>
+            {% endif %}
+
+            <div class="osha-preview-section">
+                <p class="helper-text">
+                    The OSHA counter updates automatically based on the latest procedural RCA Classification.
+                </p>
+                {% if osha_image_exists %}
+                <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
+                <div class="button-row">
+                    <form action="{{ url_for('send_osha_sign') }}" method="post">
+                        <button type="submit" class="primary-button">Send to E-Paper display</button>
+                    </form>
+                    <form action="{{ url_for('update_osha_counter') }}" method="post">
+                        <button type="submit" class="secondary-button">Regenerate sign</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="form-tab" class="tab-content {% if active_tab == 'form' %}active{% endif %}">
+            <h2>Configuration</h2>
+
+            <div class="config-grid">
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
+                            <h3>incident.io connection</h3>
+                            <p class="helper-text">Provide your API token and optional base URL override to run syncs directly from the dashboard.</p>
+                        </div>
+                        <div class="status-pills">
+                            {% if sync_config.token_saved %}
+                                <span class="status-pill success">Token saved</span>
+                            {% elif env_token_available %}
+                                <span class="status-pill info">Using env token</span>
+                            {% else %}
+                                <span class="status-pill warning">No token detected</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <label class="form-row">
+                        <span>API token</span>
+                        <input
+                            type="password"
+                            id="sync-api-token"
+                            name="sync_api_token"
+                            placeholder="INCIDENT_IO_API_TOKEN"
+                            autocomplete="off"
+                        />
+                        <span class="helper-text small">Tokens are stored locally on this server and are not displayed once saved.</span>
+                    </label>
+
+                    <label class="form-row">
+                        <span>Base URL (optional)</span>
+                        <input
+                            type="text"
+                            id="sync-base-url"
+                            name="sync_base_url"
+                            value="{{ sync_config.base_url }}"
+                            placeholder="https://api.incident.io"
+                        />
+                    </label>
+
+                    <label class="form-row">
+                        <span>Sync cadence</span>
+                        <select id="sync-cadence" name="sync_cadence">
+                            <option value="hourly" {% if sync_config.cadence == 'hourly' %}selected{% endif %}>Once an hour</option>
+                            <option value="daily" {% if sync_config.cadence == 'daily' %}selected{% endif %}>Once a day</option>
+                            <option value="weekly" {% if sync_config.cadence == 'weekly' %}selected{% endif %}>Once a week</option>
+                        </select>
+                        <span class="helper-text small">Cadence preference is saved for scheduling or manual runs. Default is once a day.</span>
+                    </label>
+
+                    <div class="form-row two-column">
+                        <label>
+                            <span>Start date (optional)</span>
+                            <input type="date" id="sync-start-date" name="sync_start_date" value="{{ sync_config.start_date }}" />
+                        </label>
+                        <label>
+                            <span>End date (optional)</span>
+                            <input type="date" id="sync-end-date" name="sync_end_date" value="{{ sync_config.end_date }}" />
+                        </label>
+                    </div>
+
+                    <div class="button-row">
+                        <button type="button" class="secondary-button" id="save-sync-settings">Save settings</button>
+                        <button type="button" class="secondary-button" id="sync-dry-run">Dry run mapping</button>
+                        <button type="button" class="primary-button" id="sync-import">Import incidents</button>
+                        <button type="button" class="danger-button" id="wipe-data">Wipe local data</button>
+                    </div>
+
+                    <div class="helper-text small config-meta">
+                        Set to sync {{ sync_config.cadence }} (pulling the last 14 days of updates by default).
+                    </div>
+
+                    {% if sync_config.last_sync_display %}
+                    <div class="helper-text small config-meta">
+                        Last import: {{ sync_config.last_sync_display }} ET ({{ sync_config.last_sync_total | default(0) }} new/updated events)
+                    </div>
+                    {% endif %}
+
+                    {% if sync_config.last_sync_events %}
+                    <div class="sync-results last-sync-results" aria-live="polite">
+                        <div class="notice info">Pulled {{ sync_config.last_sync_total }} new or updated events.</div>
+                        <table class="incidents-table">
+                            <thead>
+                                <tr>
+                                    <th>Event ID</th>
+                                    <th>Event Type</th>
+                                    <th>Change</th>
+                                    <th>Title</th>
+                                    <th>Pillar</th>
+                                    <th>Product</th>
+                                    <th>Severity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in sync_config.last_sync_events %}
+                                <tr>
+                                    <td>{{ event.inc_number }}</td>
+                                    <td>{{ event.event_type }}</td>
+                                    <td>{{ event.change_type | default('added') }}</td>
+                                    <td>{{ event.title }}</td>
+                                    <td>{{ event.pillar }}</td>
+                                    <td>{{ event.product }}</td>
+                                    <td>{{ event.severity }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
+                            <h3>Product → pillar key</h3>
+                            <p class="helper-text">View how products are grouped under each pillar from the uploaded mapping.</p>
+                        </div>
+                    </div>
+
+                    {% if key_missing %}
+                    <div class="notice error">Upload the product → pillar key before importing data.</div>
+                    {% endif %}
+                    {% if key_uploaded %}
+                    <div class="notice success">Product → pillar key saved successfully.</div>
+                    {% endif %}
+                    {% if key_error %}
+                    <div class="notice error">
+                        {% if key_error == 'missing' %}
+                            Please choose a JSON file to upload.
+                        {% elif key_error == 'decode' %}
+                            Could not read the file. Ensure it is UTF-8 encoded.
+                        {% elif key_error == 'invalid' %}
+                            The uploaded file is not valid JSON.
+                        {% elif key_error == 'format' %}
+                            The JSON must be an object mapping product names to pillars.
+                        {% else %}
+                            Unable to process the uploaded key file.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="form-row">
+                        <h4>Upload product → pillar key</h4>
+                        <p class="helper-text">Provide a JSON file mapping product names to pillars, e.g. {"Product A": "HCM"}. Uploading a new key will replace the previous mapping and update all incidents to use the latest pillars.</p>
+                        <form method="POST" action="{{ url_for('upload_key_file') }}" enctype="multipart/form-data">
+                            <input type="file" name="key_file" accept=".json" required />
+                            <button type="submit">Upload Key</button>
+                        </form>
+                    </div>
+
+                    {% if products_by_pillar and products_by_pillar.__all__|length > 0 %}
+                        <div class="pillar-map">
+                            <ul class="pillar-map-list">
+                                {% for pillar, products in products_by_pillar.items() if pillar != '__all__' %}
+                                    <li>
+                                        <strong>{{ pillar or 'Unmapped' }}</strong>
+                                        {% if products %}
+                                            <ul>
+                                                {% for product in products %}
+                                                    <li>{{ product }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="helper-text small">No products mapped.</p>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% else %}
+                        <p class="helper-text">Upload a product → pillar key to see mapping details.</p>
+                    {% endif %}
+                </div>
+
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
+                            <h3>Dry run &amp; import</h3>
+                            <p class="helper-text">Preview mapped payloads, then import all incidents in the selected window.</p>
+                        </div>
+                        <div class="status-pills" id="sync-status-pill"></div>
+                    </div>
+
+                    <div id="sync-results" class="sync-results" aria-live="polite"></div>
+
+                    <div class="mapping-preview">
+                        <div class="mapping-header">
+                            <h4>Mapped payload preview</h4>
+                            <p class="helper-text small">First 10 records after applying pillar resolution, timestamps, and date filters.</p>
+                        </div>
+                        <table class="incidents-table" id="mapping-preview-table">
+                            <thead>
+                                <tr>
+                                    <th>Incident</th>
+                                    <th>Product</th>
+                                    <th>Pillar</th>
+                                    <th>Severity</th>
+                                    <th>Reported at</th>
+                                    <th>Closed at</th>
+                                    <th>Client impact duration</th>
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mapping-preview-body">
+                                <tr class="empty-row">
+                                    <td colspan="8">Run a dry run to see mapping results.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
+    <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
+    <script id="sync-config-data" type="application/json">{{ sync_config|tojson }}</script>
+    <script id="incident-data" type="application/json">{{ incidents_by_date|tojson }}</script>
+    <script id="other-data" type="application/json">{{ other_by_date|tojson }}</script>
+
+    <footer class="site-footer" aria-label="Footer">
+        <p class="footer-text">You are viewing this page from IP address: <strong>{{ client_ip }}</strong></p>
+    </footer>
+</body>
+</html>
