@@ -30,6 +30,11 @@ OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
 OSHA_EINK_DISPLAY_IP = os.getenv("OSHA_EINK_DISPLAY_IP", "192.168.86.120")
 OSHA_EINK_DISPLAY_PORT = int(os.getenv("OSHA_EINK_DISPLAY_PORT", "5000"))
+OSHA_USE_LOCAL_EINK = os.getenv("OSHA_USE_LOCAL_EINK", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
 
 # 6-color palette for E-Paper display
@@ -268,6 +273,47 @@ def convert_osha_image_to_binary(img):
     return bytes(binary_data)
 
 
+def display_osha_on_local_epaper(img_path):
+    if not os.path.exists(img_path):
+        return False
+
+    try:
+        from inky.auto import auto as auto_inky
+    except ImportError:
+        auto_inky = None
+
+    if auto_inky:
+        try:
+            display = auto_inky()
+            img = Image.open(img_path).convert("RGB").resize(display.resolution)
+            display.set_image(img)
+            display.show()
+            return True
+        except Exception:
+            # Fall back to other drivers if auto-detection fails
+            pass
+
+    try:
+        from waveshare_epd import epd7in5_V2
+    except ImportError:
+        epd7in5_V2 = None
+
+    if epd7in5_V2:
+        try:
+            epd = epd7in5_V2.EPD()
+            epd.init()
+            epd.Clear()
+
+            img = Image.open(img_path).convert("1").resize((epd.width, epd.height))
+            epd.display(epd.getbuffer(img))
+            epd.sleep()
+            return True
+        except Exception:
+            return False
+
+    return False
+
+
 def display_osha_on_epaper(img_path):
     if not os.path.exists(img_path):
         return False
@@ -286,6 +332,21 @@ def display_osha_on_epaper(img_path):
         return response.status_code == 200
     except Exception:
         return False
+
+
+def send_osha_to_any_epaper(img_path):
+    prefer_local = OSHA_USE_LOCAL_EINK
+
+    if prefer_local and display_osha_on_local_epaper(img_path):
+        return True
+
+    if display_osha_on_epaper(img_path):
+        return True
+
+    if not prefer_local:
+        return display_osha_on_local_epaper(img_path)
+
+    return False
 
 
 def generate_osha_sign(auto_display=False, incidents=None):
@@ -342,7 +403,7 @@ def generate_osha_sign(auto_display=False, incidents=None):
     img.save(OSHA_OUTPUT_IMAGE)
 
     if auto_display:
-        display_osha_on_epaper(OSHA_OUTPUT_IMAGE)
+        send_osha_to_any_epaper(OSHA_OUTPUT_IMAGE)
 
     return True
 
@@ -2135,7 +2196,7 @@ def send_osha_sign():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
         generate_osha_sign(incidents=load_events(DATA_FILE))
 
-    status = "sent" if display_osha_on_epaper(OSHA_OUTPUT_IMAGE) else "error"
+    status = "sent" if send_osha_to_any_epaper(OSHA_OUTPUT_IMAGE) else "error"
     return redirect(url_for("index", tab="osha", osha_status=status))
 
 

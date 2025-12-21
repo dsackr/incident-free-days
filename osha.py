@@ -106,7 +106,7 @@ def send_osha_sign():
     if not os.path.exists(main_app.OSHA_OUTPUT_IMAGE):
         main_app.generate_osha_sign(incidents=main_app.load_events(main_app.DATA_FILE))
 
-    status = "sent" if main_app.display_osha_on_epaper(main_app.OSHA_OUTPUT_IMAGE) else "error"
+    status = "sent" if main_app.send_osha_to_any_epaper(main_app.OSHA_OUTPUT_IMAGE) else "error"
     return redirect(url_for("osha_dashboard", tab="osha", osha_status=status))
 
 
@@ -263,6 +263,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Preview the sync without writing to incidents.json/others.json.",
     )
+    parser.add_argument(
+        "--display-to-eink",
+        action="store_true",
+        help="Render the OSHA sign and send it to the configured E-Paper display, then exit.",
+    )
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind the Flask server")
     parser.add_argument("--port", default=5050, type=int, help="Port for the Flask server")
 
@@ -271,6 +276,13 @@ if __name__ == "__main__":
     if args.sync_incidents:
         summary = main_app.sync_incidents_from_api(dry_run=args.dry_run)
         print(json.dumps(summary, indent=2))
+    elif args.display_to_eink:
+        generated = main_app.generate_osha_sign()
+        if not generated:
+            print(json.dumps({"status": "error", "reason": "missing_background"}, indent=2))
+        else:
+            status = main_app.send_osha_to_any_epaper(main_app.OSHA_OUTPUT_IMAGE)
+            print(json.dumps({"status": "sent" if status else "error"}, indent=2))
     else:
         main_app.generate_osha_sign()
         stop_event = threading.Event()
