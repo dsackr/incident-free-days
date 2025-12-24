@@ -30,9 +30,14 @@ def send_display_buffer(display_ip, payload_bytes, *, save_name=None, timeout=DE
                 timeout=timeout,
             )
             resp.raise_for_status()
+    except requests.RequestException as exc:
+        return False, f"Display request failed: {exc}"
 
+    try:
         end_resp = session.post(f"{base_url}/display/end", timeout=timeout)
         end_resp.raise_for_status()
+    except requests.ReadTimeout as exc:
+        return True, f"Display update sent but controller timed out waiting for confirmation: {exc}"
     except requests.RequestException as exc:
         return False, f"Display request failed: {exc}"
 

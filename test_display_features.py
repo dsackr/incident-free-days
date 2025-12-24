@@ -3,10 +3,13 @@ import tempfile
 import unittest
 from unittest import mock
 
+import requests
+
 from PIL import Image
 
 import app
 import display_client
+from display_client import CHUNK_SIZE
 
 
 class DisplayConversionTests(unittest.TestCase):
@@ -41,6 +44,22 @@ class DisplayClientTests(unittest.TestCase):
         self.assertEqual(session.post.call_count, 3 + 1)
         chunk_calls = session.post.call_args_list[1:-1]
         self.assertTrue(all(call.kwargs.get("headers", {}).get("Content-Type") == "text/plain" for call in chunk_calls))
+
+    @mock.patch("display_client.requests.Session")
+    def test_send_display_buffer_allows_timeout_after_end(self, mock_session_cls):
+        session = mock_session_cls.return_value
+        ok_response = mock.Mock()
+        ok_response.raise_for_status = mock.Mock()
+        timeout_exc = requests.ReadTimeout("timed out")
+
+        # start + chunk succeed, end times out
+        session.post.side_effect = [ok_response, ok_response, timeout_exc]
+
+        payload = b"\x00" * (CHUNK_SIZE - 1)
+        success, message = display_client.send_display_buffer("1.2.3.4", payload)
+
+        self.assertTrue(success)
+        self.assertIn("timed out", message)
 
 
 class DisplayTriggerTests(unittest.TestCase):
