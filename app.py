@@ -365,7 +365,7 @@ def send_osha_sign_to_display(*, incidents=None, reason=None, incident_number=No
         display_config["display_ip"], binary_data
     )
 
-    now_ts = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+    now_ts = datetime.now(timezone.utc).isoformat()
     updated_config = {**display_config}
     updated_config["last_push_at"] = now_ts
     updated_config["last_push_status"] = "ok" if success else "error"
@@ -1579,7 +1579,9 @@ def sync_incidents_from_api(
 
         config = load_sync_config()
         config["last_sync"] = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
             "added_incidents": added_incidents,
             "added_other_events": added_other_events,
             "updated_events": updated_events,
