@@ -42,10 +42,11 @@ PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
 OSHA_PALETTE = {
     "black": (0, 0, 0, 0x0),
     "white": (255, 255, 255, 0x1),
-    "yellow": (255, 255, 0, 0x2),
+    "yellow": (255, 215, 0, 0x2),
     "red": (200, 80, 50, 0x3),
     "blue": (100, 120, 180, 0x5),
-    "green": (200, 200, 80, 0x6),
+    # Use a deeper green to make yellow tones quantize to the yellow palette entry instead of green.
+    "green": (0, 150, 0, 0x6),
 }
 
 DISPLAY_DEFAULTS = {
@@ -269,26 +270,10 @@ def convert_osha_image_to_binary(img):
     top = (new_height - 480) // 2
     img = img.crop((left, top, left + 800, top + 480))
 
-    palette_data = [
-        0,
-        0,
-        0,
-        255,
-        255,
-        255,
-        255,
-        255,
-        0,
-        200,
-        80,
-        50,
-        100,
-        120,
-        180,
-        200,
-        200,
-        80,
-    ]
+    palette_data = []
+    for color_name in ("black", "white", "yellow", "red", "blue", "green"):
+        r, g, b, _code = OSHA_PALETTE[color_name]
+        palette_data.extend([r, g, b])
     palette_img = Image.new("P", (1, 1))
     palette_img.putpalette(palette_data + [0] * (256 * 3 - len(palette_data)))
     img = img.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
