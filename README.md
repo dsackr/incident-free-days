@@ -88,6 +88,7 @@ A simple Flask app that visualizes incident-free days across a year. It renders 
 - The default year rendered on the calendar is controlled by `DEFAULT_YEAR` in `app.py` (currently `2025`).
 - The calendar uses Sunday as the first day of the week (`calendar.Calendar(firstweekday=6)`).
 - To sync incidents from incident.io, set `INCIDENT_IO_API_TOKEN` (and optionally `INCIDENT_IO_BASE_URL` if you use a non-default host).
+- To configure an ESP32-driven OSHA display, visit the hidden `/dpost` route and provide the display IP/port plus automation preferences.
 
 ## Syncing from incident.io
 The app can pull incidents directly from incident.io so you do not need to manually upload CSV files.
@@ -123,6 +124,19 @@ The app can pull incidents directly from incident.io so you do not need to manua
    ```
 
 You can also trigger the sync over HTTP using `GET /sync/incidents?dry_run=1` (dry run) or `POST /sync/incidents` with a JSON payload (token, optional date range) to persist results.
+
+## E-Paper display pushes
+- Visit `/dpost` to enter the display IP (e.g., `192.168.1.25` or `192.168.1.25:80`) and enable pushing. Settings are stored locally alongside the incident.io token.
+- When enabled, the OSHA tab shows a **Send to display** button that rerenders the OSHA sign and pushes it over the ESP32 `start/chunk/end` protocol.
+- Automation options:
+  - **Daily push** at a configured local time (defaults to `05:00 America/Phoenix`). A background worker in the Flask process handles the schedule; keep the service running (e.g., via systemd) to preserve the cadence.
+  - **Push on new procedural incident**: after each incident.io sync, the app detects a new procedural RCA incident and sends the updated sign once per incident number.
+- The OSHA status panel records the last push time, incident number, and any error text from the ESP32.
+
+### Troubleshooting display pushes
+- Verify the IP/port in `/dpost` and that the ESP32 is reachable over HTTP.
+- Timeouts or `display request failed` errors usually indicate network issues or a busy display; retry after a few seconds.
+- If pushes do not run daily, confirm the server process is running (or managed by systemd) so the background scheduler can fire.
 
 ## Repository structure
 - `app.py` — Flask application entrypoint and routing.
