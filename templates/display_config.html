@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Display Configuration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+    <div class="page">
+        <div class="page-header">
+            <h1>E-Paper Display Settings</h1>
+            <div class="header-links">
+                <a class="admin-link" href="{{ url_for('index', tab='osha') }}">Back to dashboard</a>
+            </div>
+        </div>
+
+        {% if saved %}
+        <div class="notice success">Settings saved.</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('display_settings') }}" class="config-grid">
+            <div class="config-card">
+                <div class="config-card-header">
+                    <div>
+                        <h3>Display connection</h3>
+                        <p class="helper-text">Provide the IP (and optional port) for the ESP32 display controller.</p>
+                    </div>
+                </div>
+
+                <label class="form-row">
+                    <span>Display IP</span>
+                    <input type="text" name="display_ip" value="{{ display_config.display_ip }}" placeholder="192.168.1.25" />
+                </label>
+
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="display_enabled" value="1" {% if display_config.display_enabled %}checked{% endif %} />
+                    Enable pushing to the display
+                </label>
+            </div>
+
+            <div class="config-card">
+                <div class="config-card-header">
+                    <div>
+                        <h3>Automation</h3>
+                        <p class="helper-text">Optional automations for daily pushes and procedural incidents.</p>
+                    </div>
+                </div>
+
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="push_daily_enabled" value="1" {% if display_config.push_daily_enabled %}checked{% endif %} />
+                    Push daily at
+                </label>
+                <input type="text" name="push_daily_time" value="{{ display_config.push_daily_time }}" placeholder="05:00 America/Phoenix" />
+
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="push_on_new_procedural" value="1" {% if display_config.push_on_new_procedural %}checked{% endif %} />
+                    Push when a new procedural incident is detected
+                </label>
+
+                <div class="helper-text small">
+                    <div>Last push: {{ display_config.last_push_at or 'Never' }}</div>
+                    <div>Last incident pushed: {{ display_config.last_pushed_incident or 'N/A' }}</div>
+                    {% if display_config.last_push_error %}
+                    <div class="notice error">{{ display_config.last_push_error }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <button type="submit" class="primary-button">Save</button>
+        </form>
+    </div>
+</body>
+</html>

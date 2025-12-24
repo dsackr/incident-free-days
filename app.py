@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import requests
 
 import incident_io_client
+import display_client
 
 app = Flask(__name__)
 
@@ -47,6 +48,20 @@ OSHA_PALETTE = {
     "green": (200, 200, 80, 0x6),
 }
 
+DISPLAY_DEFAULTS = {
+    "display_ip": "",
+    "display_enabled": False,
+    "push_daily_enabled": False,
+    "push_daily_time": "05:00 America/Phoenix",
+    "push_on_new_procedural": False,
+    "last_push_at": "",
+    "last_push_status": "",
+    "last_push_error": "",
+    "last_pushed_incident": "",
+    "last_daily_push_date": "",
+    "last_procedural_incident": "",
+}
+
 DEFAULT_FIELD_MAPPING = {
     "inc_number": ["incident_number", "incident_id", "id", "reference", "name"],
     "severity": ["severity", "severity_level"],
@@ -65,6 +80,28 @@ CADENCE_TO_INTERVAL = {
     "daily": timedelta(days=1),
     "weekly": timedelta(weeks=1),
 }
+
+
+def load_app_config():
+    if not os.path.exists(SYNC_CONFIG_FILE):
+        return {}
+
+    try:
+        with open(SYNC_CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    return data if isinstance(data, dict) else {}
+
+
+def save_app_config(config):
+    payload = config or {}
+    try:
+        with open(SYNC_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+    except OSError:
+        pass
 
 
 def load_osha_data():
@@ -273,6 +310,99 @@ def convert_osha_image_to_binary(img):
     return bytes(binary_data)
 
 
+def latest_procedural_incident_number(incidents):
+    procedural = _procedural_incidents(incidents)
+    if not procedural:
+        return ""
+
+    incident = procedural[0]["incident"]
+    return _normalize_incident_number(
+        incident.get("inc_number") or incident.get("id") or incident.get("reference")
+    )
+
+
+def _parse_daily_push_time(raw_value):
+    value = str(raw_value or "05:00 America/Phoenix").strip()
+    if not value:
+        value = "05:00 America/Phoenix"
+
+    parts = value.split()
+    time_part = parts[0]
+    tz_part = parts[1] if len(parts) > 1 else "America/Phoenix"
+
+    try:
+        hour, minute = [int(p) for p in time_part.split(":", maxsplit=1)]
+        push_time = time(hour=hour, minute=minute)
+    except Exception:
+        push_time = time(hour=5, minute=0)
+
+    try:
+        tz = ZoneInfo(tz_part)
+    except Exception:
+        tz = timezone.utc
+
+    return push_time, tz
+
+
+def send_osha_sign_to_display(*, incidents=None, reason=None, incident_number=None):
+    display_config = load_display_config()
+    if not (display_config.get("display_enabled") and display_config.get("display_ip")):
+        return False, "Display not configured"
+
+    incidents = incidents or load_events(DATA_FILE)
+    generate_osha_sign(incidents=incidents)
+
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        return False, "OSHA output image not found"
+
+    try:
+        img = Image.open(OSHA_OUTPUT_IMAGE)
+        binary_data = convert_osha_image_to_binary(img)
+    except Exception as exc:  # pragma: no cover - safety
+        return False, f"Failed to render OSHA image: {exc}"
+
+    success, message = display_client.send_display_buffer(
+        display_config["display_ip"], binary_data
+    )
+
+    now_ts = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+    updated_config = {**display_config}
+    updated_config["last_push_at"] = now_ts
+    updated_config["last_push_status"] = "ok" if success else "error"
+    updated_config["last_push_error"] = "" if success else message
+    if incident_number:
+        updated_config["last_pushed_incident"] = incident_number
+    if reason == "daily":
+        push_time, tz = _parse_daily_push_time(display_config.get("push_daily_time"))
+        updated_config["last_daily_push_date"] = datetime.now(tz=tz).date().isoformat()
+
+    save_display_config(updated_config)
+    return success, message
+
+
+def push_display_for_new_procedural_if_needed(incidents):
+    display_config = load_display_config()
+    if not (
+        display_config.get("display_enabled")
+        and display_config.get("push_on_new_procedural")
+        and display_config.get("display_ip")
+    ):
+        return False
+
+    latest_incident = latest_procedural_incident_number(incidents)
+    if not latest_incident or latest_incident == display_config.get("last_procedural_incident"):
+        return False
+
+    success, _message = send_osha_sign_to_display(
+        incidents=incidents, reason="procedural", incident_number=latest_incident
+    )
+    updated = {**display_config, "last_procedural_incident": latest_incident}
+    if success:
+        updated["last_pushed_incident"] = latest_incident
+    save_display_config(updated)
+    return success
+
+
 def display_osha_on_local_epaper(img_path):
     if not os.path.exists(img_path):
         return False
@@ -468,17 +598,10 @@ def normalize_field_mapping(raw_mapping):
 
 
 def load_sync_config():
-    if not os.path.exists(SYNC_CONFIG_FILE):
-        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
-
-    try:
-        with open(SYNC_CONFIG_FILE, "r") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
+    data = load_app_config()
 
     if not isinstance(data, dict):
-        return {"cadence": "daily", "field_mapping": DEFAULT_FIELD_MAPPING}
+        data = {}
 
     data.setdefault("cadence", "daily")
     data.setdefault("field_mapping", DEFAULT_FIELD_MAPPING)
@@ -488,22 +611,43 @@ def load_sync_config():
 
 def save_sync_config(config):
     normalized_mapping = normalize_field_mapping(config.get("field_mapping"))
-    payload = {
-        "cadence": config.get("cadence", "daily"),
-        "base_url": config.get("base_url") or "",
-        "token": config.get("token") or "",
-        "start_date": config.get("start_date") or "",
-        "end_date": config.get("end_date") or "",
-        "last_sync": config.get("last_sync") or {},
-        "field_mapping": normalized_mapping,
-    }
+    payload = load_app_config()
+    last_sync_value = config.get("last_sync") if "last_sync" in config else None
+    payload.update(
+        {
+            "cadence": config.get("cadence", "daily"),
+            "base_url": config.get("base_url") or "",
+            "token": config.get("token") or payload.get("token") or "",
+            "start_date": config.get("start_date") or payload.get("start_date") or "",
+            "end_date": config.get("end_date") or payload.get("end_date") or "",
+            "last_sync": last_sync_value
+            if last_sync_value is not None
+            else payload.get("last_sync")
+            or {},
+            "field_mapping": normalized_mapping,
+        }
+    )
 
-    try:
-        with open(SYNC_CONFIG_FILE, "w") as f:
-            json.dump(payload, f, indent=2)
-    except OSError:
-        # If we cannot persist, fall back to in-memory only behavior.
-        pass
+    save_app_config(payload)
+
+
+def load_display_config():
+    config = load_app_config()
+    existing = config.get("display") if isinstance(config, dict) else {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    merged = {**DISPLAY_DEFAULTS, **existing}
+    merged["display_enabled"] = bool(merged.get("display_enabled"))
+    merged["push_daily_enabled"] = bool(merged.get("push_daily_enabled"))
+    merged["push_on_new_procedural"] = bool(merged.get("push_on_new_procedural"))
+    return merged
+
+
+def save_display_config(display_config):
+    config = load_app_config()
+    config["display"] = {**DISPLAY_DEFAULTS, **(display_config or {})}
+    save_app_config(config)
 
 
 def build_sync_config_view(raw_config):
@@ -585,6 +729,41 @@ def auto_sync_loop(stop_event):
             print(f"Auto-sync error: {exc}")
         finally:
             stop_event.wait(AUTO_SYNC_POLL_SECONDS)
+
+
+def daily_display_push_loop(stop_event):
+    while not stop_event.is_set():
+        wait_seconds = 60
+        try:
+            display_config = load_display_config()
+            if not (
+                display_config.get("display_enabled")
+                and display_config.get("push_daily_enabled")
+                and display_config.get("display_ip")
+            ):
+                continue
+
+            push_time, tz = _parse_daily_push_time(display_config.get("push_daily_time"))
+            now = datetime.now(tz=tz)
+            try:
+                last_push_date = (
+                    datetime.fromisoformat(display_config.get("last_daily_push_date"))
+                    if display_config.get("last_daily_push_date")
+                    else None
+                )
+            except ValueError:
+                last_push_date = None
+
+            if now.time() >= push_time and (not last_push_date or last_push_date.date() < now.date()):
+                incidents = load_events(DATA_FILE)
+                latest_incident = latest_procedural_incident_number(incidents)
+                send_osha_sign_to_display(
+                    incidents=incidents, reason="daily", incident_number=latest_incident
+                )
+        except Exception as exc:  # pragma: no cover - safeguard for background loop
+            print(f"Daily display push error: {exc}")
+        finally:
+            stop_event.wait(wait_seconds)
 
 
 def parse_date(raw_value):
@@ -1411,6 +1590,8 @@ def sync_incidents_from_api(
         }
         save_sync_config(config)
 
+        push_display_for_new_procedural_if_needed(incidents)
+
     return {
         "fetched": len(fetched),
         "added_incidents": added_incidents,
@@ -1456,6 +1637,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     sync_config_raw = load_sync_config()
     sync_config = build_sync_config_view(sync_config_raw)
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
+    display_config = load_display_config()
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -1932,6 +2114,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_image_exists=osha_image_exists,
         osha_background_exists=osha_background_exists,
         osha_status=osha_status,
+        display_config=display_config,
     )
 
 
@@ -2180,6 +2363,38 @@ def ioadmin():
     return render_dashboard(tab_override="form", show_config_tab=True)
 
 
+@app.route("/dpost", methods=["GET", "POST"])
+def display_settings():
+    if request.method == "POST":
+        display_config = load_display_config()
+        payload = {
+            "display_ip": (request.form.get("display_ip") or "").strip(),
+            "display_enabled": request.form.get("display_enabled") == "1",
+            "push_daily_enabled": request.form.get("push_daily_enabled") == "1",
+            "push_daily_time": (request.form.get("push_daily_time") or "").strip()
+            or display_config.get("push_daily_time"),
+            "push_on_new_procedural": request.form.get("push_on_new_procedural")
+            == "1",
+            "last_push_at": display_config.get("last_push_at", ""),
+            "last_push_status": display_config.get("last_push_status", ""),
+            "last_push_error": display_config.get("last_push_error", ""),
+            "last_pushed_incident": display_config.get("last_pushed_incident", ""),
+            "last_daily_push_date": display_config.get("last_daily_push_date", ""),
+            "last_procedural_incident": display_config.get(
+                "last_procedural_incident", ""
+            ),
+        }
+
+        save_display_config(payload)
+        return redirect(url_for("display_settings", saved=1))
+
+    display_config = load_display_config()
+    saved = request.args.get("saved") == "1"
+    return render_template(
+        "display_config.html", display_config=display_config, saved=saved
+    )
+
+
 @app.route("/osha/display")
 def osha_display():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
@@ -2189,6 +2404,21 @@ def osha_display():
         return "No OSHA sign available", 404
 
     return send_file(OSHA_OUTPUT_IMAGE, mimetype="image/png")
+
+
+@app.route("/osha/send_to_display", methods=["POST"])
+def send_osha_to_display():
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+    latest_incident = latest_procedural_incident_number(incidents)
+    status, _message = send_osha_sign_to_display(
+        incidents=incidents, incident_number=latest_incident, reason="manual"
+    )
+    status_label = "sent" if status else "error"
+    return redirect(url_for("index", tab="osha", osha_status=status_label))
 
 
 @app.route("/osha/send", methods=["POST"])
@@ -2712,10 +2942,15 @@ if __name__ == "__main__":
         sync_thread = threading.Thread(
             target=auto_sync_loop, args=(stop_event,), daemon=True
         )
+        display_thread = threading.Thread(
+            target=daily_display_push_loop, args=(stop_event,), daemon=True
+        )
         sync_thread.start()
+        display_thread.start()
 
         try:
             app.run(host=args.host, port=args.port, debug=False)
         finally:
             stop_event.set()
             sync_thread.join(timeout=1)
+            display_thread.join(timeout=1)
