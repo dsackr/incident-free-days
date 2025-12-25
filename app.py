@@ -1,4 +1,14 @@
-from flask import Flask, jsonify, render_template, request, redirect, send_file, url_for
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    redirect,
+    send_file,
+    url_for,
+    Response,
+    stream_with_context,
+)
 import re
 from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
@@ -10,6 +20,7 @@ import os
 import datetime as dt
 import threading
 import time as time_module
+from queue import SimpleQueue
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import requests
@@ -255,20 +266,24 @@ def convert_osha_image_to_binary(img):
     if img.mode != "RGB":
         img = img.convert("RGB")
 
+    display_width = 800
+    display_height = 480
     img_ratio = img.width / img.height
-    display_ratio = 800 / 480
+    display_ratio = display_width / display_height
 
     if img_ratio > display_ratio:
-        new_height = 480
-        new_width = int(480 * img_ratio)
+        new_width = display_width
+        new_height = int(display_width / img_ratio)
     else:
-        new_width = 800
-        new_height = int(800 / img_ratio)
+        new_height = display_height
+        new_width = int(display_height * img_ratio)
 
-    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-    left = (new_width - 800) // 2
-    top = (new_height - 480) // 2
-    img = img.crop((left, top, left + 800, top + 480))
+    resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    letterboxed = Image.new("RGB", (display_width, display_height), "white")
+    left = (display_width - new_width) // 2
+    top = (display_height - new_height) // 2
+    letterboxed.paste(resized, (left, top))
+    img = letterboxed
 
     palette_data = []
     for color_name in ("black", "white", "yellow", "red", "blue", "green"):
@@ -329,7 +344,9 @@ def _parse_daily_push_time(raw_value):
     return push_time, tz
 
 
-def send_osha_sign_to_display(*, incidents=None, reason=None, incident_number=None):
+def send_osha_sign_to_display(
+    *, incidents=None, reason=None, incident_number=None, progress_callback=None
+):
     display_config = load_display_config()
     if not (display_config.get("display_enabled") and display_config.get("display_ip")):
         return False, "Display not configured"
@@ -347,7 +364,7 @@ def send_osha_sign_to_display(*, incidents=None, reason=None, incident_number=No
         return False, f"Failed to render OSHA image: {exc}"
 
     success, message = display_client.send_display_buffer(
-        display_config["display_ip"], binary_data
+        display_config["display_ip"], binary_data, progress_callback=progress_callback
     )
 
     now_ts = datetime.now(timezone.utc).isoformat()
@@ -2406,6 +2423,59 @@ def send_osha_to_display():
     )
     status_label = "sent" if status else "error"
     return redirect(url_for("index", tab="osha", osha_status=status_label))
+
+
+@app.route("/api/osha/send_to_display", methods=["POST"])
+def stream_osha_to_display():
+    display_config = load_display_config()
+    if not (display_config.get("display_enabled") and display_config.get("display_ip")):
+        return (
+            jsonify({"status": "error", "message": "Display not configured"}),
+            400,
+        )
+
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+    latest_incident = latest_procedural_incident_number(incidents)
+
+    events = SimpleQueue()
+
+    def enqueue(payload):
+        events.put(json.dumps(payload) + "\n")
+
+    def progress(stage, chunk_index, total_chunks, message=None):
+        payload = {"status": stage, "chunk": chunk_index, "total_chunks": total_chunks}
+        if message:
+            payload["message"] = message
+        enqueue(payload)
+
+    def worker():
+        success, message = send_osha_sign_to_display(
+            incidents=incidents,
+            incident_number=latest_incident,
+            reason="manual",
+            progress_callback=progress,
+        )
+        enqueue({"status": "done", "success": success, "message": message})
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    def event_stream():
+        while True:
+            payload = events.get()
+            yield payload
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError:
+                parsed = {}
+            if parsed.get("status") == "done":
+                break
+
+    return Response(stream_with_context(event_stream()), mimetype="text/plain")
 
 
 @app.route("/osha/send", methods=["POST"])

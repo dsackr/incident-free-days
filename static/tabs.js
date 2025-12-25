@@ -874,6 +874,125 @@ document.addEventListener("DOMContentLoaded", function () {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync.timestamp}`);
     }
 
+    const oshaForm = document.getElementById("send-osha-display-form");
+    const oshaButton = document.getElementById("send-osha-display-btn");
+    const progressCard = document.getElementById("osha-send-progress");
+    const progressFill = document.getElementById("osha-send-progress-fill");
+    const progressBar = document.getElementById("osha-send-progress-bar");
+    const progressLabel = document.getElementById("osha-send-progress-label");
+    const progressCount = document.getElementById("osha-send-progress-count");
+    const progressStatus = document.getElementById("osha-send-status");
+
+    if (oshaForm && oshaButton && progressCard && progressFill && progressBar) {
+        let controller = null;
+        const resetProgress = () => {
+            progressFill.style.width = "0%";
+            progressBar.setAttribute("aria-valuenow", "0");
+            progressLabel.textContent = "Preparing to send…";
+            progressCount.textContent = "";
+            progressStatus.textContent = "";
+            progressStatus.removeAttribute("data-state");
+        };
+
+        const updateProgress = (chunk, total) => {
+            const percentage = total ? Math.min(100, Math.round((chunk / total) * 100)) : 0;
+            progressFill.style.width = `${percentage}%`;
+            progressBar.setAttribute("aria-valuenow", String(percentage));
+            if (total) {
+                progressCount.textContent = `${chunk} / ${total} chunks`;
+            }
+        };
+
+        const setStatus = (message, state = "info") => {
+            progressStatus.textContent = message;
+            progressStatus.dataset.state = state;
+        };
+
+        oshaForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (controller) {
+                return;
+            }
+
+            controller = new AbortController();
+            resetProgress();
+            progressCard.hidden = false;
+            oshaButton.disabled = true;
+            oshaButton.textContent = "Sending…";
+
+            try {
+                const response = await fetch("/api/osha/send_to_display", {
+                    method: "POST",
+                    signal: controller.signal,
+                });
+
+                if (!response.ok || !response.body) {
+                    let errorMessage = `Display request failed (${response.status})`;
+                    try {
+                        const errorText = await response.text();
+                        const parsed = JSON.parse(errorText);
+                        errorMessage = parsed.message || errorMessage;
+                    } catch (err) {
+                        // Ignore parse failures; fall back to default error message.
+                    }
+
+                    throw new Error(errorMessage);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let totalChunks = 0;
+                let currentChunk = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop();
+
+                    lines.forEach((line) => {
+                        if (!line.trim()) return;
+                        let payload;
+                        try {
+                            payload = JSON.parse(line);
+                        } catch (err) {
+                            console.error("Unable to parse display progress", err);
+                            return;
+                        }
+
+                        if (payload.status === "start" || payload.status === "starting") {
+                            totalChunks = payload.total_chunks || 0;
+                            updateProgress(0, totalChunks);
+                            progressLabel.textContent = "Sending to display…";
+                        } else if (payload.status === "chunk") {
+                            currentChunk = payload.chunk || currentChunk;
+                            updateProgress(currentChunk, payload.total_chunks || totalChunks);
+                            progressLabel.textContent = "Sending to display…";
+                        } else if (payload.status === "error") {
+                            setStatus(payload.message || "Unable to send to display", "error");
+                        } else if (payload.status === "done") {
+                            if (payload.success) {
+                                setStatus("Display updated", "success");
+                                updateProgress(totalChunks || currentChunk || 1, totalChunks || currentChunk || 1);
+                            } else {
+                                setStatus(payload.message || "Unable to send to display", "error");
+                            }
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Send to display failed", err);
+                setStatus("Unable to send to display", "error");
+            } finally {
+                oshaButton.disabled = false;
+                oshaButton.textContent = "Send to E-Paper display";
+                controller = null;
+            }
+        });
+    }
+
     dryRunButton?.addEventListener("click", () => handleSyncRequest(true));
     importButton?.addEventListener("click", () => handleSyncRequest(false));
     saveSettingsButton?.addEventListener("click", handleSaveSettings);
