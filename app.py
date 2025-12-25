@@ -497,9 +497,10 @@ def generate_osha_sign(auto_display=False, incidents=None):
         days_font = ImageFont.truetype(font_path, 400)
         count_font = ImageFont.truetype(font_path, 150)
         inc_font = ImageFont.truetype(font_path, 100)
+        inc_date_font = ImageFont.truetype(font_path, 60)
         check_font = ImageFont.truetype(font_path, 80)
     except OSError:
-        days_font = count_font = inc_font = check_font = ImageFont.load_default()
+        days_font = count_font = inc_font = inc_date_font = check_font = ImageFont.load_default()
 
     days_text = str(data.get("days_since", 0))
     days_bbox = draw.textbbox((0, 0), days_text, font=days_font)
@@ -521,6 +522,23 @@ def generate_osha_sign(auto_display=False, incidents=None):
     inc_x = (img_width // 2) - (inc_width // 2) + 70
     inc_y = 650
     draw.text((inc_x, inc_y), inc_text, font=inc_font, fill="white")
+
+    incident_date_text = ""
+    incident_date_raw = data.get("incident_date")
+    if incident_date_raw:
+        try:
+            incident_date = datetime.fromisoformat(str(incident_date_raw))
+            incident_date_text = incident_date.strftime("%m/%d/%Y")
+        except ValueError:
+            incident_date_text = ""
+
+    if incident_date_text:
+        inc_height = inc_bbox[3] - inc_bbox[1]
+        date_bbox = draw.textbbox((0, 0), incident_date_text, font=inc_date_font)
+        date_width = date_bbox[2] - date_bbox[0]
+        date_x = (img_width // 2) - (date_width // 2) + 70
+        date_y = inc_y + inc_height + 10
+        draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
         "Change": (940, 575),
