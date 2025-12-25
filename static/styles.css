@@ -1133,6 +1133,18 @@ h1 {
     margin-bottom: 12px;
 }
 
+#incident-modal-date {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 0;
+}
+
+#incident-modal-date .modal-date {
+    font-size: 0.5em;
+    color: #516174;
+}
+
 .modal-body {
     max-height: 320px;
     overflow-y: auto;
