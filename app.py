@@ -497,7 +497,7 @@ def generate_osha_sign(auto_display=False, incidents=None):
         days_font = ImageFont.truetype(font_path, 400)
         count_font = ImageFont.truetype(font_path, 150)
         inc_font = ImageFont.truetype(font_path, 100)
-        inc_date_font = ImageFont.truetype(font_path, 60)
+        inc_date_font = ImageFont.truetype(font_path, 30)
         check_font = ImageFont.truetype(font_path, 80)
     except OSError:
         days_font = count_font = inc_font = inc_date_font = check_font = ImageFont.load_default()
