@@ -7,9 +7,11 @@ from flask import (
     send_file,
     url_for,
     Response,
-    stream_with_context,
 )
 import re
+import glob
+import logging
+from logging.handlers import TimedRotatingFileHandler
 from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -20,7 +22,6 @@ import os
 import datetime as dt
 import threading
 import time as time_module
-from queue import SimpleQueue
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import requests
@@ -47,6 +48,8 @@ OSHA_USE_LOCAL_EINK = os.getenv("OSHA_USE_LOCAL_EINK", "false").lower() in {
     "true",
     "yes",
 }
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
 PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
 
 # 6-color palette for E-Paper display
@@ -58,20 +61,6 @@ OSHA_PALETTE = {
     "blue": (100, 120, 180, 0x5),
     # Use a deeper green to make yellow tones quantize to the yellow palette entry instead of green.
     "green": (0, 150, 0, 0x6),
-}
-
-DISPLAY_DEFAULTS = {
-    "display_ip": "",
-    "display_enabled": False,
-    "push_daily_enabled": False,
-    "push_daily_time": "05:00 America/Phoenix",
-    "push_on_new_procedural": False,
-    "last_push_at": "",
-    "last_push_status": "",
-    "last_push_error": "",
-    "last_pushed_incident": "",
-    "last_daily_push_date": "",
-    "last_procedural_incident": "",
 }
 
 DEFAULT_FIELD_MAPPING = {
@@ -92,6 +81,36 @@ CADENCE_TO_INTERVAL = {
     "daily": timedelta(days=1),
     "weekly": timedelta(weeks=1),
 }
+
+
+def _configure_logging(log_path=LOG_FILE):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Replace any existing timed handlers to avoid duplicate log streams when reconfiguring
+    for handler in list(logger.handlers):
+        if isinstance(handler, TimedRotatingFileHandler):
+            logger.removeHandler(handler)
+            handler.close()
+
+    formatter = logging.Formatter(
+        "%(asctime)sZ %(levelname)s [%(name)s] %(message)s", "%Y-%m-%dT%H:%M:%S"
+    )
+    file_handler = TimedRotatingFileHandler(
+        log_path, when="midnight", interval=1, backupCount=1, utc=True
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    if not any(isinstance(handler, logging.StreamHandler) for handler in logger.handlers):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
+
+
+_configure_logging()
 
 
 def load_app_config():
@@ -321,35 +340,10 @@ def latest_procedural_incident_number(incidents):
     )
 
 
-def _parse_daily_push_time(raw_value):
-    value = str(raw_value or "05:00 America/Phoenix").strip()
-    if not value:
-        value = "05:00 America/Phoenix"
-
-    parts = value.split()
-    time_part = parts[0]
-    tz_part = parts[1] if len(parts) > 1 else "America/Phoenix"
-
-    try:
-        hour, minute = [int(p) for p in time_part.split(":", maxsplit=1)]
-        push_time = time(hour=hour, minute=minute)
-    except Exception:
-        push_time = time(hour=5, minute=0)
-
-    try:
-        tz = ZoneInfo(tz_part)
-    except Exception:
-        tz = timezone.utc
-
-    return push_time, tz
-
-
-def send_osha_sign_to_display(
-    *, incidents=None, reason=None, incident_number=None, progress_callback=None
-):
-    display_config = load_display_config()
-    if not (display_config.get("display_enabled") and display_config.get("display_ip")):
-        return False, "Display not configured"
+def send_osha_sign_to_ip(display_ip, *, incidents=None, progress_callback=None):
+    display_ip = (display_ip or "").strip()
+    if not display_ip:
+        return False, "Display IP is required"
 
     incidents = incidents or load_events(DATA_FILE)
     generate_osha_sign(incidents=incidents)
@@ -364,45 +358,58 @@ def send_osha_sign_to_display(
         return False, f"Failed to render OSHA image: {exc}"
 
     success, message = display_client.send_display_buffer(
-        display_config["display_ip"], binary_data, progress_callback=progress_callback
+        display_ip, binary_data, progress_callback=progress_callback
     )
 
-    now_ts = datetime.now(timezone.utc).isoformat()
-    updated_config = {**display_config}
-    updated_config["last_push_at"] = now_ts
-    updated_config["last_push_status"] = "ok" if success else "error"
-    updated_config["last_push_error"] = "" if success else message
-    if incident_number:
-        updated_config["last_pushed_incident"] = incident_number
-    if reason == "daily":
-        push_time, tz = _parse_daily_push_time(display_config.get("push_daily_time"))
-        updated_config["last_daily_push_date"] = datetime.now(tz=tz).date().isoformat()
+    log_message = (
+        f"Sent OSHA sign to {display_ip}: {message}" if success else f"OSHA send failed for {display_ip}: {message}"
+    )
+    if success:
+        app.logger.info(log_message)
+    else:
+        app.logger.error(log_message)
 
-    save_display_config(updated_config)
     return success, message
 
 
-def push_display_for_new_procedural_if_needed(incidents):
-    display_config = load_display_config()
-    if not (
-        display_config.get("display_enabled")
-        and display_config.get("push_on_new_procedural")
-        and display_config.get("display_ip")
-    ):
-        return False
+def _parse_log_timestamp(line):
+    """Best-effort parser for the ISO-ish timestamp at the start of a log line."""
 
-    latest_incident = latest_procedural_incident_number(incidents)
-    if not latest_incident or latest_incident == display_config.get("last_procedural_incident"):
-        return False
+    if not line:
+        return None
 
-    success, _message = send_osha_sign_to_display(
-        incidents=incidents, reason="procedural", incident_number=latest_incident
-    )
-    updated = {**display_config, "last_procedural_incident": latest_incident}
-    if success:
-        updated["last_pushed_incident"] = latest_incident
-    save_display_config(updated)
-    return success
+    ts_part = line.split(" ", maxsplit=1)[0].strip()
+    if not ts_part:
+        return None
+
+    ts_value = ts_part.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(ts_value)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
+def read_recent_logs(hours=24):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    entries = []
+
+    for path in sorted(glob.glob(f"{LOG_FILE}*")):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    parsed_ts = _parse_log_timestamp(line)
+                    if parsed_ts and parsed_ts >= cutoff:
+                        entries.append((parsed_ts, line.rstrip()))
+        except OSError:
+            continue
+
+    entries.sort(key=lambda item: item[0])
+    return [line for _ts, line in entries]
 
 
 def display_osha_on_local_epaper(img_path):
@@ -651,25 +658,6 @@ def save_sync_config(config):
     save_app_config(payload)
 
 
-def load_display_config():
-    config = load_app_config()
-    existing = config.get("display") if isinstance(config, dict) else {}
-    if not isinstance(existing, dict):
-        existing = {}
-
-    merged = {**DISPLAY_DEFAULTS, **existing}
-    merged["display_enabled"] = bool(merged.get("display_enabled"))
-    merged["push_daily_enabled"] = bool(merged.get("push_daily_enabled"))
-    merged["push_on_new_procedural"] = bool(merged.get("push_on_new_procedural"))
-    return merged
-
-
-def save_display_config(display_config):
-    config = load_app_config()
-    config["display"] = {**DISPLAY_DEFAULTS, **(display_config or {})}
-    save_app_config(config)
-
-
 def build_sync_config_view(raw_config):
     raw_config = raw_config or {}
     last_sync_raw = raw_config.get("last_sync") or {}
@@ -746,44 +734,9 @@ def auto_sync_loop(stop_event):
                     field_mapping=config.get("field_mapping"),
                 )
         except Exception as exc:  # pragma: no cover - safeguard for background loop
-            print(f"Auto-sync error: {exc}")
+            app.logger.exception("Auto-sync error: %s", exc)
         finally:
             stop_event.wait(AUTO_SYNC_POLL_SECONDS)
-
-
-def daily_display_push_loop(stop_event):
-    while not stop_event.is_set():
-        wait_seconds = 60
-        try:
-            display_config = load_display_config()
-            if not (
-                display_config.get("display_enabled")
-                and display_config.get("push_daily_enabled")
-                and display_config.get("display_ip")
-            ):
-                continue
-
-            push_time, tz = _parse_daily_push_time(display_config.get("push_daily_time"))
-            now = datetime.now(tz=tz)
-            try:
-                last_push_date = (
-                    datetime.fromisoformat(display_config.get("last_daily_push_date"))
-                    if display_config.get("last_daily_push_date")
-                    else None
-                )
-            except ValueError:
-                last_push_date = None
-
-            if now.time() >= push_time and (not last_push_date or last_push_date.date() < now.date()):
-                incidents = load_events(DATA_FILE)
-                latest_incident = latest_procedural_incident_number(incidents)
-                send_osha_sign_to_display(
-                    incidents=incidents, reason="daily", incident_number=latest_incident
-                )
-        except Exception as exc:  # pragma: no cover - safeguard for background loop
-            print(f"Daily display push error: {exc}")
-        finally:
-            stop_event.wait(wait_seconds)
 
 
 def parse_date(raw_value):
@@ -1612,8 +1565,6 @@ def sync_incidents_from_api(
         }
         save_sync_config(config)
 
-        push_display_for_new_procedural_if_needed(incidents)
-
     return {
         "fetched": len(fetched),
         "added_incidents": added_incidents,
@@ -1659,7 +1610,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     sync_config_raw = load_sync_config()
     sync_config = build_sync_config_view(sync_config_raw)
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
-    display_config = load_display_config()
 
     try:
         year = int(year_str) if year_str else DEFAULT_YEAR
@@ -2136,7 +2086,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_image_exists=osha_image_exists,
         osha_background_exists=osha_background_exists,
         osha_status=osha_status,
-        display_config=display_config,
     )
 
 
@@ -2385,38 +2334,6 @@ def ioadmin():
     return render_dashboard(tab_override="form", show_config_tab=True)
 
 
-@app.route("/dpost", methods=["GET", "POST"])
-def display_settings():
-    if request.method == "POST":
-        display_config = load_display_config()
-        payload = {
-            "display_ip": (request.form.get("display_ip") or "").strip(),
-            "display_enabled": request.form.get("display_enabled") == "1",
-            "push_daily_enabled": request.form.get("push_daily_enabled") == "1",
-            "push_daily_time": (request.form.get("push_daily_time") or "").strip()
-            or display_config.get("push_daily_time"),
-            "push_on_new_procedural": request.form.get("push_on_new_procedural")
-            == "1",
-            "last_push_at": display_config.get("last_push_at", ""),
-            "last_push_status": display_config.get("last_push_status", ""),
-            "last_push_error": display_config.get("last_push_error", ""),
-            "last_pushed_incident": display_config.get("last_pushed_incident", ""),
-            "last_daily_push_date": display_config.get("last_daily_push_date", ""),
-            "last_procedural_incident": display_config.get(
-                "last_procedural_incident", ""
-            ),
-        }
-
-        save_display_config(payload)
-        return redirect(url_for("display_settings", saved=1))
-
-    display_config = load_display_config()
-    saved = request.args.get("saved") == "1"
-    return render_template(
-        "display_config.html", display_config=display_config, saved=saved
-    )
-
-
 @app.route("/osha/display")
 def osha_display():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
@@ -2428,27 +2345,13 @@ def osha_display():
     return send_file(OSHA_OUTPUT_IMAGE, mimetype="image/png")
 
 
-@app.route("/osha/send_to_display", methods=["POST"])
-def send_osha_to_display():
-    incidents = [
-        event
-        for event in load_events(DATA_FILE)
-        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
-    ]
-    latest_incident = latest_procedural_incident_number(incidents)
-    status, _message = send_osha_sign_to_display(
-        incidents=incidents, incident_number=latest_incident, reason="manual"
-    )
-    status_label = "sent" if status else "error"
-    return redirect(url_for("index", tab="osha", osha_status=status_label))
-
-
-@app.route("/api/osha/send_to_display", methods=["POST"])
-def stream_osha_to_display():
-    display_config = load_display_config()
-    if not (display_config.get("display_enabled") and display_config.get("display_ip")):
+@app.route("/api/osha/send_to_display", methods=["GET"])
+def trigger_osha_display_send():
+    display_ip = (request.args.get("ip") or "").strip()
+    if not display_ip:
+        app.logger.warning("OSHA display send requested without an IP address")
         return (
-            jsonify({"status": "error", "message": "Display not configured"}),
+            jsonify({"status": "error", "message": "Query parameter 'ip' is required"}),
             400,
         )
 
@@ -2459,41 +2362,28 @@ def stream_osha_to_display():
     ]
     latest_incident = latest_procedural_incident_number(incidents)
 
-    events = SimpleQueue()
-
-    def enqueue(payload):
-        events.put(json.dumps(payload) + "\n")
-
-    def progress(stage, chunk_index, total_chunks, message=None):
-        payload = {"status": stage, "chunk": chunk_index, "total_chunks": total_chunks}
-        if message:
-            payload["message"] = message
-        enqueue(payload)
+    app.logger.info(
+        "Queuing OSHA sign send to %s (latest incident: %s)",
+        display_ip,
+        latest_incident or "none",
+    )
 
     def worker():
-        success, message = send_osha_sign_to_display(
-            incidents=incidents,
-            incident_number=latest_incident,
-            reason="manual",
-            progress_callback=progress,
-        )
-        enqueue({"status": "done", "success": success, "message": message})
+        send_osha_sign_to_ip(display_ip, incidents=incidents)
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
 
-    def event_stream():
-        while True:
-            payload = events.get()
-            yield payload
-            try:
-                parsed = json.loads(payload)
-            except json.JSONDecodeError:
-                parsed = {}
-            if parsed.get("status") == "done":
-                break
+    return jsonify({"status": "queued", "message": "Send started"}), 202
 
-    return Response(stream_with_context(event_stream()), mimetype="text/plain")
+
+@app.route("/logs", methods=["GET"])
+def view_logs():
+    recent = read_recent_logs()
+    body = "\n".join(recent)
+    if body:
+        body += "\n"
+    return Response(body, mimetype="text/plain")
 
 
 @app.route("/osha/send", methods=["POST"])
@@ -3017,15 +2907,10 @@ if __name__ == "__main__":
         sync_thread = threading.Thread(
             target=auto_sync_loop, args=(stop_event,), daemon=True
         )
-        display_thread = threading.Thread(
-            target=daily_display_push_loop, args=(stop_event,), daemon=True
-        )
         sync_thread.start()
-        display_thread.start()
 
         try:
             app.run(host=args.host, port=args.port, debug=False)
         finally:
             stop_event.set()
             sync_thread.join(timeout=1)
-            display_thread.join(timeout=1)

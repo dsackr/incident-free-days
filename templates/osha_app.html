@@ -24,12 +24,6 @@
         <div id="osha-tab" class="tab-content {% if active_tab == 'osha' %}active{% endif %}">
             <h2>OSHA Counter</h2>
 
-            {% if osha_status == 'sent' %}
-            <div class="notice success">OSHA sign sent to the E-Paper display.</div>
-            {% elif osha_status == 'error' %}
-            <div class="notice error">Unable to send the OSHA sign to the E-Paper display.</div>
-            {% endif %}
-
             {% if not osha_background_exists %}
             <div class="notice warning">
                 Upload <code>static/background.png</code> to generate the OSHA counter sign image.
@@ -42,26 +36,9 @@
                 </p>
                 {% if osha_image_exists %}
                 <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
-                <div class="button-row">
-                    <form action="{{ url_for('send_osha_to_display') }}" method="post" id="send-osha-display-form">
-                        <button type="submit" class="primary-button" id="send-osha-display-btn">Send to E-Paper display</button>
-                    </form>
-                    <form action="{{ url_for('update_osha_counter') }}" method="post">
-                        <button type="submit" class="secondary-button">Regenerate sign</button>
-                    </form>
-                </div>
-                <div class="progress-card" id="osha-send-progress" aria-live="polite" hidden>
-                    <div class="progress-card-header">
-                        <div>
-                            <p class="progress-title" id="osha-send-progress-label">Preparing to send…</p>
-                            <p class="progress-subtitle" id="osha-send-progress-count"></p>
-                        </div>
-                        <div class="progress-status" id="osha-send-status"></div>
-                    </div>
-                    <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="osha-send-progress-bar">
-                        <div class="progress-bar-fill" id="osha-send-progress-fill"></div>
-                    </div>
-                </div>
+                <form action="{{ url_for('update_osha_counter') }}" method="post" class="button-row">
+                    <button type="submit" class="secondary-button">Regenerate sign</button>
+                </form>
                 {% else %}
                 <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
                 {% endif %}
