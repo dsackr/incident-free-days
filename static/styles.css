@@ -697,6 +697,68 @@ h1 {
     margin: 0 auto;
 }
 
+.progress-card {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #d3dbe7;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.progress-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-title {
+    margin: 0;
+    font-weight: 600;
+    color: #0f3d75;
+}
+
+.progress-subtitle {
+    margin: 2px 0 0;
+    color: #475569;
+    font-size: 13px;
+}
+
+.progress-status {
+    font-size: 13px;
+    color: #475569;
+    min-width: 140px;
+    text-align: right;
+}
+
+.progress-status[data-state="error"] {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.progress-status[data-state="success"] {
+    color: #166534;
+    font-weight: 600;
+}
+
+.progress-bar {
+    position: relative;
+    width: 100%;
+    height: 12px;
+    margin-top: 10px;
+    background: #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #1d4ed8, #0ea5e9);
+    transition: width 0.2s ease;
+}
+
 /* Calendar grid */
 
 .months-grid {
