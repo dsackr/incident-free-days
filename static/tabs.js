@@ -108,7 +108,16 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     const renderModal = (kind, dateStr, incidents) => {
-        modalDateEl.textContent = `${kind === "incidents" ? "Incidents" : "Events"} on ${dateStr}`;
+        modalDateEl.textContent = "";
+
+        const modalTitle = document.createElement("span");
+        modalTitle.textContent = kind === "incidents" ? "Incidents" : "Events";
+
+        const modalDate = document.createElement("span");
+        modalDate.classList.add("modal-date");
+        modalDate.textContent = `on ${dateStr}`;
+
+        modalDateEl.append(modalTitle, modalDate);
 
         if (!incidents || incidents.length === 0) {
             modalBody.innerHTML = `<p>No records for ${dateStr}.</p>`;
