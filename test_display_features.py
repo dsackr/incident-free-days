@@ -1,5 +1,6 @@
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 import unittest
 from unittest import mock
 
@@ -62,51 +63,82 @@ class DisplayClientTests(unittest.TestCase):
         self.assertIn("timed out", message)
 
 
-class DisplayTriggerTests(unittest.TestCase):
+class DisplaySendEndpointTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.original_sync_config = app.SYNC_CONFIG_FILE
         self.original_data_file = app.DATA_FILE
+        self.original_osha_output = app.OSHA_OUTPUT_IMAGE
+        self.original_log_file = app.LOG_FILE
 
-        app.SYNC_CONFIG_FILE = os.path.join(self.temp_dir.name, "sync_config.json")
         app.DATA_FILE = os.path.join(self.temp_dir.name, "incidents.json")
+        app.OSHA_OUTPUT_IMAGE = os.path.join(self.temp_dir.name, "current_sign.png")
+        app.LOG_FILE = os.path.join(self.temp_dir.name, "app.log")
+        app._configure_logging(app.LOG_FILE)
 
     def tearDown(self):
-        app.SYNC_CONFIG_FILE = self.original_sync_config
         app.DATA_FILE = self.original_data_file
+        app.OSHA_OUTPUT_IMAGE = self.original_osha_output
+        app.LOG_FILE = self.original_log_file
+        app._configure_logging(app.LOG_FILE)
         self.temp_dir.cleanup()
 
-    def test_new_procedural_triggers_once(self):
-        incidents = [
-            {
-                "inc_number": "INC-100",
-                "date": "2025-01-01",
-                "reported_at": "2025-01-01T00:00:00",
-                "rca_classification": "Deploy",
-                "event_type": "Operational Incident",
-            }
-        ]
+    def test_endpoint_requires_ip(self):
+        client = app.app.test_client()
+        response = client.get("/api/osha/send_to_display")
 
-        app.save_events(app.DATA_FILE, incidents)
-        config = app.load_display_config()
-        config.update(
-            {
-                "display_ip": "1.2.3.4",
-                "display_enabled": True,
-                "push_on_new_procedural": True,
-            }
-        )
-        app.save_display_config(config)
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "error")
 
-        with mock.patch("app.send_osha_sign_to_display") as mock_push:
-            mock_push.return_value = (True, "ok")
+    def test_endpoint_queues_background_send(self):
+        client = app.app.test_client()
 
-            first = app.push_display_for_new_procedural_if_needed(incidents)
-            second = app.push_display_for_new_procedural_if_needed(incidents)
+        def fake_generate(**_kwargs):
+            img = Image.new("RGB", (10, 10), "white")
+            img.save(app.OSHA_OUTPUT_IMAGE)
+            return True
 
-        self.assertTrue(first)
-        self.assertFalse(second)
-        self.assertEqual(mock_push.call_count, 1)
+        called = {}
+
+        def fake_send(ip, **_kwargs):
+            called["ip"] = ip
+            return True, "ok"
+
+        class InstantThread:
+            def __init__(self, target=None, args=None, kwargs=None, daemon=None):
+                self._target = target
+                self._args = args or []
+                self._kwargs = kwargs or {}
+
+            def start(self):
+                if self._target:
+                    self._target(*self._args, **self._kwargs)
+
+        with (
+            mock.patch("app.generate_osha_sign", side_effect=fake_generate),
+            mock.patch("app.send_osha_sign_to_ip", side_effect=fake_send),
+            mock.patch("app.threading.Thread", InstantThread),
+        ):
+            response = client.get("/api/osha/send_to_display?ip=10.0.0.5")
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(called["ip"], "10.0.0.5")
+
+    def test_logs_endpoint_returns_recent_entries(self):
+        cutoff_line = datetime.now(timezone.utc) - timedelta(hours=25)
+        recent_line = datetime.now(timezone.utc)
+
+        with open(app.LOG_FILE, "w", encoding="utf-8") as handle:
+            handle.write(cutoff_line.strftime("%Y-%m-%dT%H:%M:%SZ old entry") + "\n")
+            handle.write(recent_line.strftime("%Y-%m-%dT%H:%M:%SZ new entry") + "\n")
+
+        client = app.app.test_client()
+        response = client.get("/logs")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("new entry", body)
+        self.assertNotIn("old entry", body)
 
 
 if __name__ == "__main__":

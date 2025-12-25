@@ -662,12 +662,6 @@
         <div id="osha-tab" class="tab-content {% if active_tab == 'osha' %}active{% endif %}">
             <h2>Osha Counter</h2>
 
-            {% if osha_status == 'sent' %}
-            <div class="notice success">OSHA sign sent to the E-Paper display.</div>
-            {% elif osha_status == 'error' %}
-            <div class="notice error">Unable to send the OSHA sign to the E-Paper display.</div>
-            {% endif %}
-
             {% if not osha_background_exists %}
             <div class="notice warning">
                 Upload <code>static/background.png</code> to generate the OSHA counter sign image.
@@ -678,21 +672,6 @@
                 <p class="helper-text">
                     The OSHA counter updates automatically based on the latest procedural RCA Classification.
                 </p>
-                {% if display_config.display_enabled and display_config.display_ip %}
-                <form method="POST" action="{{ url_for('send_osha_to_display') }}" class="inline-form">
-                    <button type="submit" class="primary-button">Send to display</button>
-                </form>
-                <div class="helper-text small">
-                    <div>Last push: {{ display_config.last_push_at or 'Never' }}</div>
-                    <div>Last incident pushed: {{ display_config.last_pushed_incident or 'N/A' }}</div>
-                    {% if display_config.last_push_status %}
-                    <div>Status: {{ display_config.last_push_status }}</div>
-                    {% endif %}
-                    {% if display_config.last_push_error %}
-                    <div class="notice error">{{ display_config.last_push_error }}</div>
-                    {% endif %}
-                </div>
-                {% endif %}
                 {% if osha_image_exists %}
                 <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
                 {% else %}
