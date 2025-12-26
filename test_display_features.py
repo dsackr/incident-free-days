@@ -144,6 +144,25 @@ class DisplaySendEndpointTests(unittest.TestCase):
         self.assertIn("new entry", body)
         self.assertNotIn("old entry", body)
 
+    def test_logs_endpoint_orders_newest_first(self):
+        earlier_line = datetime.now(timezone.utc) - timedelta(hours=1)
+        latest_line = datetime.now(timezone.utc)
+
+        with open(app.LOG_FILE, "w", encoding="utf-8") as handle:
+            handle.write(earlier_line.strftime("%Y-%m-%dT%H:%M:%SZ earlier entry") + "\n")
+            handle.write(latest_line.strftime("%Y-%m-%dT%H:%M:%SZ latest entry") + "\n")
+
+        client = app.app.test_client()
+        response = client.get("/logs")
+
+        body = response.get_data(as_text=True)
+        latest_index = body.find("latest entry")
+        earlier_index = body.find("earlier entry")
+
+        self.assertGreaterEqual(latest_index, 0)
+        self.assertGreaterEqual(earlier_index, 0)
+        self.assertLess(latest_index, earlier_index)
+
     def test_display_frame_endpoint_supports_etag(self):
         payload = b"\x01" * DISPLAY_FRAME_BYTES
         with open(app.OSHA_OUTPUT_BINARY, "wb") as handle:

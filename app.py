@@ -467,7 +467,7 @@ def read_recent_logs(hours=24):
         except OSError:
             continue
 
-    entries.sort(key=lambda item: item[0])
+    entries.sort(key=lambda item: item[0], reverse=True)
     return [line for _ts, line in entries]
 
 
@@ -2501,10 +2501,7 @@ def trigger_osha_display_send():
 @app.route("/logs", methods=["GET"])
 def view_logs():
     recent = read_recent_logs()
-    body = "\n".join(recent)
-    if body:
-        body += "\n"
-    return Response(body, mimetype="text/plain")
+    return render_template("logs.html", logs=recent)
 
 
 @app.route("/osha/send", methods=["POST"])
