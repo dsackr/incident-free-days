@@ -1,6 +1,8 @@
+import io
+
 import requests
 
-CHUNK_SIZE = 4096
+DISPLAY_FRAME_BYTES = 192000
 DEFAULT_TIMEOUT = 15
 
 
@@ -14,13 +16,14 @@ def send_display_buffer(
 ):
     """Push a binary buffer to the ESP32 display controller.
 
-    Returns a tuple of (success: bool, message: str).
+    The updated firmware expects a single multipart upload containing exactly
+    192000 bytes (4bpp, two pixels per byte). Returns (success, message).
     """
 
     base_url = f"http://{display_ip}".rstrip("/")
     session = requests.Session()
 
-    total_chunks = max(1, (len(payload_bytes) + CHUNK_SIZE - 1) // CHUNK_SIZE)
+    total_chunks = 1
 
     def report(stage, chunk_index=0, message=None):
         if not progress_callback:
@@ -32,33 +35,18 @@ def send_display_buffer(
             # Progress updates should never break the send loop.
             pass
 
+    if len(payload_bytes) != DISPLAY_FRAME_BYTES:
+        return False, f"Payload must be {DISPLAY_FRAME_BYTES} bytes"
+
     try:
-        start_params = {"save": save_name} if save_name else None
+        files = {"file": (save_name or "frame.bin", io.BytesIO(payload_bytes))}
         response = session.post(
-            f"{base_url}/display/start", params=start_params, timeout=timeout
+            f"{base_url}/display/upload",
+            files=files,
+            timeout=timeout,
         )
         response.raise_for_status()
-
-        report("start")
-
-        for idx, offset in enumerate(range(0, len(payload_bytes), CHUNK_SIZE), start=1):
-            chunk = payload_bytes[offset : offset + CHUNK_SIZE]
-            hex_body = chunk.hex()
-            resp = session.post(
-                f"{base_url}/display/chunk",
-                data=hex_body,
-                headers={"Content-Type": "text/plain"},
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            report("chunk", idx)
-    except requests.RequestException as exc:
-        report("error", message=str(exc))
-        return False, f"Display request failed: {exc}"
-
-    try:
-        end_resp = session.post(f"{base_url}/display/end", timeout=timeout)
-        end_resp.raise_for_status()
+        report("done", total_chunks)
     except requests.ReadTimeout as exc:
         report("done", total_chunks, str(exc))
         return True, f"Display update sent but controller timed out waiting for confirmation: {exc}"
@@ -66,5 +54,4 @@ def send_display_buffer(
         report("error", message=str(exc))
         return False, f"Display request failed: {exc}"
 
-    report("done", total_chunks)
     return True, "ok"

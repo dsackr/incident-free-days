@@ -1,6 +1,7 @@
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 import unittest
 from unittest import mock
 
@@ -10,7 +11,7 @@ from PIL import Image
 
 import app
 import display_client
-from display_client import CHUNK_SIZE
+from display_client import DISPLAY_FRAME_BYTES
 
 
 class DisplayConversionTests(unittest.TestCase):
@@ -30,21 +31,21 @@ class DisplayConversionTests(unittest.TestCase):
 
 class DisplayClientTests(unittest.TestCase):
     @mock.patch("display_client.requests.Session")
-    def test_send_display_buffer_calls_chunk_endpoints(self, mock_session_cls):
+    def test_send_display_buffer_sends_single_upload(self, mock_session_cls):
         session = mock_session_cls.return_value
         ok_response = mock.Mock()
         ok_response.raise_for_status = mock.Mock()
-        session.post.side_effect = [ok_response, ok_response, ok_response, ok_response]
+        session.post.side_effect = [ok_response]
 
-        payload = b"\x00" * 5000
+        payload = b"\x00" * DISPLAY_FRAME_BYTES
         success, message = display_client.send_display_buffer("1.2.3.4", payload)
 
         self.assertTrue(success)
         self.assertEqual(message, "ok")
-        # start + 2 chunks + end
-        self.assertEqual(session.post.call_count, 3 + 1)
-        chunk_calls = session.post.call_args_list[1:-1]
-        self.assertTrue(all(call.kwargs.get("headers", {}).get("Content-Type") == "text/plain" for call in chunk_calls))
+        self.assertEqual(session.post.call_count, 1)
+        call_kwargs = session.post.call_args.kwargs
+        self.assertIn("files", call_kwargs)
+        self.assertIn("file", call_kwargs["files"])
 
     @mock.patch("display_client.requests.Session")
     def test_send_display_buffer_allows_timeout_after_end(self, mock_session_cls):
@@ -53,10 +54,10 @@ class DisplayClientTests(unittest.TestCase):
         ok_response.raise_for_status = mock.Mock()
         timeout_exc = requests.ReadTimeout("timed out")
 
-        # start + chunk succeed, end times out
-        session.post.side_effect = [ok_response, ok_response, timeout_exc]
+        # upload succeeds, post-call times out when waiting for response body
+        session.post.side_effect = [timeout_exc]
 
-        payload = b"\x00" * (CHUNK_SIZE - 1)
+        payload = b"\x00" * DISPLAY_FRAME_BYTES
         success, message = display_client.send_display_buffer("1.2.3.4", payload)
 
         self.assertTrue(success)
@@ -69,9 +70,11 @@ class DisplaySendEndpointTests(unittest.TestCase):
         self.original_data_file = app.DATA_FILE
         self.original_osha_output = app.OSHA_OUTPUT_IMAGE
         self.original_log_file = app.LOG_FILE
+        self.original_osha_binary = app.OSHA_OUTPUT_BINARY
 
         app.DATA_FILE = os.path.join(self.temp_dir.name, "incidents.json")
         app.OSHA_OUTPUT_IMAGE = os.path.join(self.temp_dir.name, "current_sign.png")
+        app.OSHA_OUTPUT_BINARY = os.path.join(self.temp_dir.name, "current_sign.bin")
         app.LOG_FILE = os.path.join(self.temp_dir.name, "app.log")
         app._configure_logging(app.LOG_FILE)
 
@@ -79,6 +82,7 @@ class DisplaySendEndpointTests(unittest.TestCase):
         app.DATA_FILE = self.original_data_file
         app.OSHA_OUTPUT_IMAGE = self.original_osha_output
         app.LOG_FILE = self.original_log_file
+        app.OSHA_OUTPUT_BINARY = self.original_osha_binary
         app._configure_logging(app.LOG_FILE)
         self.temp_dir.cleanup()
 
@@ -139,6 +143,46 @@ class DisplaySendEndpointTests(unittest.TestCase):
         body = response.get_data(as_text=True)
         self.assertIn("new entry", body)
         self.assertNotIn("old entry", body)
+
+    def test_display_frame_endpoint_supports_etag(self):
+        payload = b"\x01" * DISPLAY_FRAME_BYTES
+        with open(app.OSHA_OUTPUT_BINARY, "wb") as handle:
+            handle.write(payload)
+
+        client = app.app.test_client()
+        response = client.get("/display/frame")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(int(response.headers.get("Content-Length")), DISPLAY_FRAME_BYTES)
+        etag = response.headers.get("ETag")
+        self.assertIsNotNone(etag)
+
+        cached = client.get("/display/frame", headers={"If-None-Match": etag})
+        self.assertEqual(cached.status_code, 304)
+
+    def test_upload_endpoint_validates_and_sets_frame(self):
+        client = app.app.test_client()
+
+        too_small = client.post(
+            "/display/upload",
+            data={"file": (BytesIO(b"123"), "bad.bin")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(too_small.status_code, 400)
+
+        payload = b"\x02" * DISPLAY_FRAME_BYTES
+        upload = client.post(
+            "/display/upload",
+            data={"file": (BytesIO(payload), "frame.bin")},
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(upload.status_code, 200)
+        etag = upload.get_json().get("etag")
+
+        served = client.get("/display/frame")
+        self.assertEqual(served.data, payload)
+        self.assertEqual(served.headers.get("ETag"), etag)
 
 
 if __name__ == "__main__":
