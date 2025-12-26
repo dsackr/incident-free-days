@@ -112,6 +112,20 @@ def _configure_logging(log_path=LOG_FILE):
         stream_handler.setFormatter(formatter)
         logger.addHandler(stream_handler)
 
+    # Reduce noisy request logs for endpoints that refresh frequently (e.g. /logs).
+    class ExcludePathsFilter(logging.Filter):
+        def __init__(self, excluded):
+            super().__init__()
+            self.excluded = tuple(excluded)
+
+        def filter(self, record):
+            message = record.getMessage()
+            return not any(path in message for path in self.excluded)
+
+    noisy_paths = ["GET /logs", "GET /logs/"]
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.addFilter(ExcludePathsFilter(noisy_paths))
+
 
 _configure_logging()
 
