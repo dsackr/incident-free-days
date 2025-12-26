@@ -604,7 +604,9 @@ def generate_osha_sign(auto_display=False, incidents=None):
         date_bbox = draw.textbbox((0, 0), incident_date_text, font=inc_date_font)
         date_width = date_bbox[2] - date_bbox[0]
         date_x = (img_width // 2) - (date_width // 2) + 70
-        date_y = inc_y + inc_height + 10
+        # Add a little extra spacing so the date sits lower in the red box
+        # (roughly 20px lower than before, leaving it just above the yellow border).
+        date_y = inc_y + inc_height + 30
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
