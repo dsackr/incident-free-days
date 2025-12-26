@@ -22,6 +22,7 @@ import os
 import datetime as dt
 import threading
 import time as time_module
+import hashlib
 from io import StringIO, BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import requests
@@ -41,6 +42,7 @@ DEFAULT_YEAR = 2025
 OSHA_DATA_FILE = os.path.join(BASE_DIR, "osha_data.json")
 OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
+OSHA_OUTPUT_BINARY = os.path.join(BASE_DIR, "static", "current_sign.bin")
 OSHA_EINK_DISPLAY_IP = os.getenv("OSHA_EINK_DISPLAY_IP", "192.168.86.120")
 OSHA_EINK_DISPLAY_PORT = int(os.getenv("OSHA_EINK_DISPLAY_PORT", "5000"))
 OSHA_USE_LOCAL_EINK = os.getenv("OSHA_USE_LOCAL_EINK", "false").lower() in {
@@ -76,6 +78,7 @@ DEFAULT_FIELD_MAPPING = {
 RECENT_SYNC_EVENT_LIMIT = 25
 DEFAULT_SYNC_WINDOW_DAYS = 14
 AUTO_SYNC_POLL_SECONDS = 300
+DISPLAY_FRAME_BYTES = 192000
 CADENCE_TO_INTERVAL = {
     "hourly": timedelta(hours=1),
     "daily": timedelta(days=1),
@@ -313,7 +316,7 @@ def convert_osha_image_to_binary(img):
     img = img.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
     img = img.convert("RGB")
 
-    binary_data = bytearray(192000)
+    binary_data = bytearray(DISPLAY_FRAME_BYTES)
 
     for row in range(480):
         for col in range(0, 800, 2):
@@ -327,6 +330,64 @@ def convert_osha_image_to_binary(img):
             binary_data[byte_index] = (code1 << 4) | code2
 
     return bytes(binary_data)
+
+
+def _save_display_frame(frame_bytes):
+    try:
+        with open(OSHA_OUTPUT_BINARY, "wb") as handle:
+            handle.write(frame_bytes)
+    except OSError:
+        pass
+
+
+def _load_cached_display_frame():
+    if not os.path.exists(OSHA_OUTPUT_BINARY):
+        return None
+
+    try:
+        with open(OSHA_OUTPUT_BINARY, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return None
+
+    if len(data) != DISPLAY_FRAME_BYTES:
+        return None
+
+    return data
+
+
+def _render_latest_frame():
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        generate_osha_sign(incidents=load_events(DATA_FILE))
+
+    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+        return None
+
+    try:
+        img = Image.open(OSHA_OUTPUT_IMAGE)
+        frame = convert_osha_image_to_binary(img)
+    except Exception:
+        return None
+
+    if len(frame) == DISPLAY_FRAME_BYTES:
+        _save_display_frame(frame)
+
+    return frame
+
+
+def load_display_frame_bytes():
+    cached = _load_cached_display_frame()
+    if cached is not None:
+        return cached
+
+    return _render_latest_frame()
+
+
+def display_frame_etag(frame_bytes):
+    if not frame_bytes:
+        return None
+
+    return hashlib.sha256(frame_bytes).hexdigest()
 
 
 def latest_procedural_incident_number(incidents):
@@ -351,11 +412,9 @@ def send_osha_sign_to_ip(display_ip, *, incidents=None, progress_callback=None):
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
         return False, "OSHA output image not found"
 
-    try:
-        img = Image.open(OSHA_OUTPUT_IMAGE)
-        binary_data = convert_osha_image_to_binary(img)
-    except Exception as exc:  # pragma: no cover - safety
-        return False, f"Failed to render OSHA image: {exc}"
+    binary_data = load_display_frame_bytes()
+    if not binary_data:
+        return False, "Failed to render OSHA image"
 
     success, message = display_client.send_display_buffer(
         display_ip, binary_data, progress_callback=progress_callback
@@ -458,12 +517,13 @@ def display_osha_on_epaper(img_path):
         return False
 
     try:
-        img = Image.open(img_path)
-        binary_data = convert_osha_image_to_binary(img)
+        frame_bytes = load_display_frame_bytes()
+        if not frame_bytes:
+            return False
 
         response = requests.post(
-            f"http://{OSHA_EINK_DISPLAY_IP}:{OSHA_EINK_DISPLAY_PORT}/display/binary",
-            files={"file": ("sign.bin", binary_data)},
+            f"http://{OSHA_EINK_DISPLAY_IP}:{OSHA_EINK_DISPLAY_PORT}/display/upload",
+            files={"file": ("sign.bin", frame_bytes)},
             headers={"Connection": "keep-alive"},
             timeout=120,
         )
@@ -558,6 +618,13 @@ def generate_osha_sign(auto_display=False, incidents=None):
         draw.text((check_x, check_y), "✓", font=check_font, fill="blue")
 
     img.save(OSHA_OUTPUT_IMAGE)
+
+    try:
+        frame_bytes = convert_osha_image_to_binary(img)
+        if len(frame_bytes) == DISPLAY_FRAME_BYTES:
+            _save_display_frame(frame_bytes)
+    except Exception:
+        pass
 
     if auto_display:
         send_osha_to_any_epaper(OSHA_OUTPUT_IMAGE)
@@ -2332,6 +2399,58 @@ def stats_view():
 @app.route("/ioadmin", methods=["GET"])
 def ioadmin():
     return render_dashboard(tab_override="form", show_config_tab=True)
+
+
+@app.route("/display/frame", methods=["GET"])
+def display_frame_pull():
+    frame_bytes = load_display_frame_bytes()
+
+    if not frame_bytes:
+        return ("No frame available", 404)
+
+    if len(frame_bytes) != DISPLAY_FRAME_BYTES:
+        return ("Invalid frame size", 500)
+
+    etag = display_frame_etag(frame_bytes)
+    if etag and request.headers.get("If-None-Match") == etag:
+        return Response(status=304, headers={"ETag": etag})
+
+    headers = {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": str(len(frame_bytes)),
+    }
+    if etag:
+        headers["ETag"] = etag
+
+    return Response(frame_bytes, headers=headers)
+
+
+@app.route("/display/upload", methods=["POST"])
+def display_frame_upload():
+    upload = request.files.get("file")
+    if not upload:
+        return jsonify({"status": "error", "message": "Missing file part"}), 400
+
+    payload = upload.read()
+    if len(payload) != DISPLAY_FRAME_BYTES:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"Frame must be {DISPLAY_FRAME_BYTES} bytes",
+                }
+            ),
+            400,
+        )
+
+    _save_display_frame(payload)
+    etag = display_frame_etag(payload)
+
+    response = jsonify({"status": "ok", "etag": etag})
+    if etag:
+        response.headers["ETag"] = etag
+
+    return response
 
 
 @app.route("/osha/display")
