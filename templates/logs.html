@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Recent Logs</title>
+    <meta http-equiv="refresh" content="2" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 1.5rem;
+        background: #f7f7f7;
+      }
+      h1 {
+        margin-bottom: 1rem;
+      }
+      .log-container {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        max-width: 960px;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Recent Logs</h1>
+    <div class="log-container">
+      <pre>{{ logs | join('\n') }}</pre>
+    </div>
+  </body>
+</html>
