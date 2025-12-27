@@ -593,7 +593,7 @@ def generate_osha_sign(auto_display=False, incidents=None):
     prior_text = str(data.get("prior_count", 0))
     prior_bbox = draw.textbbox((0, 0), prior_text, font=count_font)
     prior_width = prior_bbox[2] - prior_bbox[0]
-    prior_x = 220 - (prior_width // 2)
+    prior_x = 290 - (prior_width // 2)
     prior_y = 630
     draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
 
@@ -624,9 +624,9 @@ def generate_osha_sign(auto_display=False, incidents=None):
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
-        "Change": (940, 575),
-        "Deploy": (940, 645),
-        "Missed": (940, 705),
+        "Change": (1010, 575),
+        "Deploy": (1010, 645),
+        "Missed": (1010, 705),
     }
 
     if data.get("reason") in reason_positions:
