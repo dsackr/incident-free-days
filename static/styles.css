@@ -221,6 +221,126 @@ h1 {
     margin: 12px 0;
 }
 
+.filter-card {
+    border: 1px solid #d9e5f4;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: #ffffff;
+}
+
+.filter-card.compact {
+    padding: 8px 10px;
+}
+
+.filter-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-card-title {
+    margin: 0;
+    font-weight: 700;
+    color: #1f2a3b;
+}
+
+.filter-summary-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+}
+
+.filter-chip.muted {
+    background: #f0f4fa;
+    color: #50627a;
+}
+
+.collapsible[hidden] {
+    display: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin: 6px 0 10px;
+    flex-wrap: wrap;
+}
+
+.pillar-selector {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.pill-button {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #b3c5dc;
+    background: #f5f8fc;
+    color: #1f2a3b;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pill-button.active {
+    background: #005fa3;
+    color: #ffffff;
+    border-color: #005fa3;
+}
+
+.pillar-products {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+}
+
+.product-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.product-panel-title {
+    margin: 0;
+    font-weight: 600;
+    color: #1f2a3b;
+}
+
+.product-panel-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 6px 12px;
+    margin-top: 8px;
+}
+
+.checkbox-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.checkbox-option.compact {
+    font-size: 13px;
+}
+
+.filter-card.inline-options {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
 .calendar-header {
     display: flex;
     justify-content: space-between;

@@ -199,13 +199,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const exportButtons = document.querySelectorAll(".export-calendar");
 
-    const setupCheckboxDropdown = ({
-        dropdownId,
-        toggleId,
-        menuId,
-        selectionLabelId,
-        inputName,
-    }) => {
+    const setupCheckboxDropdown = ({ dropdownId, toggleId, menuId, selectionLabelId, inputName }) => {
         const dropdown = document.getElementById(dropdownId);
         const toggle = document.getElementById(toggleId);
         const menu = document.getElementById(menuId);
@@ -250,95 +244,12 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     setupCheckboxDropdown({
-        dropdownId: "severity-dropdown",
-        toggleId: "severity-dropdown-toggle",
-        menuId: "severity-dropdown-menu",
-        selectionLabelId: "severity-selection-label",
-        inputName: "severity",
-    });
-
-    setupCheckboxDropdown({
-        dropdownId: "severity-dropdown-table",
-        toggleId: "severity-dropdown-toggle-table",
-        menuId: "severity-dropdown-menu-table",
-        selectionLabelId: "severity-selection-label-table",
-        inputName: "severity",
-    });
-
-    setupCheckboxDropdown({
         dropdownId: "event-type-dropdown",
         toggleId: "event-type-dropdown-toggle",
         menuId: "event-type-dropdown-menu",
         selectionLabelId: "event-type-selection-label",
         inputName: "event_type",
     });
-
-    const rebuildProductOptions = (productSelect, allowedProducts) => {
-        if (!productSelect) return;
-
-        const currentValue = productSelect.value;
-        productSelect.innerHTML = "";
-
-        const allOption = document.createElement("option");
-        allOption.value = "";
-        allOption.textContent = "All";
-        productSelect.appendChild(allOption);
-
-        allowedProducts.forEach((product) => {
-            const option = document.createElement("option");
-            option.value = product;
-            option.textContent = product;
-            productSelect.appendChild(option);
-        });
-
-        if (currentValue && allowedProducts.includes(currentValue)) {
-            productSelect.value = currentValue;
-        } else {
-            productSelect.value = "";
-        }
-    };
-
-    const setupPillarProductSync = () => {
-        const forms = document.querySelectorAll(".control-form");
-
-        forms.forEach((form) => {
-            const pillarSelect = form.querySelector("select[name='pillar']");
-            const productSelect = form.querySelector("select[name='product']");
-
-            if (!pillarSelect || !productSelect) return;
-
-            const updateProductsForPillar = () => {
-                const selectedPillar = pillarSelect?.value || "";
-                const allowedProducts =
-                    (selectedPillar && productsByPillar[selectedPillar]) || allProducts;
-
-                rebuildProductOptions(productSelect, allowedProducts);
-
-                if (
-                    productSelect.value &&
-                    Array.isArray(allowedProducts) &&
-                    !allowedProducts.includes(productSelect.value)
-                ) {
-                    productSelect.value = "";
-                }
-            };
-
-            const syncPillarToProduct = () => {
-                const selectedProduct = productSelect.value;
-                const mappedPillar = productPillarMap[selectedProduct];
-                if (mappedPillar && pillarSelect.value !== mappedPillar) {
-                    pillarSelect.value = mappedPillar;
-                    updateProductsForPillar();
-                }
-            };
-
-            pillarSelect.addEventListener("change", updateProductsForPillar);
-            productSelect.addEventListener("change", syncPillarToProduct);
-
-            updateProductsForPillar();
-            syncPillarToProduct();
-        });
-    };
 
     const setupAutoSubmitFilters = () => {
         const forms = document.querySelectorAll(".control-form");
@@ -354,14 +265,209 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const inputs = form.querySelectorAll("select, input[type='checkbox']");
             inputs.forEach((input) => {
+                if (input.dataset.manualSubmit === "true") return;
                 input.addEventListener("change", triggerSubmit);
             });
         });
     };
 
-    setupPillarProductSync();
+    const setupCollapsibles = () => {
+        document.querySelectorAll("[data-collapsible-toggle]").forEach((btn) => {
+            const panelId = btn.getAttribute("aria-controls") || `${btn.dataset.collapsibleToggle}-panel`;
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
 
+            const togglePanel = () => {
+                const isHidden = panel.hasAttribute("hidden");
+                if (isHidden) {
+                    panel.removeAttribute("hidden");
+                    btn.setAttribute("aria-expanded", "true");
+                } else {
+                    panel.setAttribute("hidden", "hidden");
+                    btn.setAttribute("aria-expanded", "false");
+                }
+            };
+
+            btn.addEventListener("click", togglePanel);
+        });
+    };
+
+    const updateProductSummary = (container, products, pillars) => {
+        if (!container) return;
+        container.innerHTML = "";
+        const addChip = (label, muted = false) => {
+            const chip = document.createElement("span");
+            chip.className = muted ? "filter-chip muted" : "filter-chip";
+            chip.textContent = label;
+            container.appendChild(chip);
+        };
+
+        if (products.size > 0) {
+            Array.from(products)
+                .sort()
+                .forEach((prod) => addChip(prod));
+            return;
+        }
+
+        if (pillars.size > 0) {
+            Array.from(pillars)
+                .sort()
+                .forEach((pill) => addChip(pill));
+            return;
+        }
+
+        addChip("All products", true);
+    };
+
+    const applyActivePillar = (buttons, panels, targetPillar) => {
+        buttons.forEach((btn) => {
+            const isActive = btn.dataset.pillarToggle === targetPillar;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+
+        panels.forEach((panel) => {
+            const isMatch = panel.dataset.pillarProducts === targetPillar;
+            if (isMatch) {
+                panel.removeAttribute("hidden");
+            } else {
+                panel.setAttribute("hidden", "hidden");
+            }
+        });
+    };
+
+    const setupPillarProductFilters = (formId) => {
+        const form = document.getElementById(formId);
+        if (!form) return;
+
+        const productCheckboxes = form.querySelectorAll("[data-product-option]");
+        if (!productCheckboxes.length) return;
+
+        const pillars = form.querySelectorAll("[data-pillar-toggle]");
+        const panels = form.querySelectorAll("[data-pillar-products]");
+        const hiddenInputs = form.querySelector("[id$='product-filter-hidden-inputs']");
+        const summary = form.querySelector("[data-product-summary]");
+        const saveButton = form.querySelector("[data-save-products]");
+        const clearAllButton = form.querySelector("[data-clear-all-products]");
+
+        const getSelectedProducts = () =>
+            new Set(
+                Array.from(productCheckboxes)
+                    .filter((input) => input.checked)
+                    .map((input) => input.value)
+            );
+
+        const derivePillarsFromProducts = (products) => {
+            const derived = new Set();
+            products.forEach((prod) => {
+                const pillar = productPillarMap[prod];
+                if (pillar) derived.add(pillar);
+            });
+            return derived;
+        };
+
+        const updateHiddenInputs = (products) => {
+            if (!hiddenInputs) return;
+            hiddenInputs.innerHTML = "";
+            const pillarsForProducts = derivePillarsFromProducts(products);
+
+            pillarsForProducts.forEach((pillar) => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "pillar";
+                input.value = pillar;
+                hiddenInputs.appendChild(input);
+            });
+
+            products.forEach((product) => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "product";
+                input.value = product;
+                hiddenInputs.appendChild(input);
+            });
+
+            updateProductSummary(summary, products, pillarsForProducts);
+            return pillarsForProducts;
+        };
+
+        const submitForm = () => {
+            if (typeof form.requestSubmit === "function") {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        };
+
+        const productPanel = form.querySelector("[id$='product-filter-panel']");
+        const collapsePanel = () => {
+            if (!productPanel) return;
+            const toggle = form.querySelector(`[aria-controls='${productPanel.id}']`);
+            productPanel.setAttribute("hidden", "hidden");
+            toggle?.setAttribute("aria-expanded", "false");
+        };
+
+        const activateDefaultPillar = () => {
+            const selected = Array.from(productCheckboxes).find((input) => input.checked);
+            const targetPillar = selected?.dataset.pillar || pillars[0]?.dataset.pillarToggle;
+            if (targetPillar) {
+                applyActivePillar(pillars, panels, targetPillar);
+            }
+        };
+
+        pillars.forEach((btn) => {
+            btn.addEventListener("click", () => {
+                applyActivePillar(pillars, panels, btn.dataset.pillarToggle);
+            });
+        });
+
+        form.querySelectorAll("[data-select-all]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const target = btn.getAttribute("data-select-all");
+                productCheckboxes.forEach((input) => {
+                    if (input.dataset.pillar === target) {
+                        input.checked = true;
+                    }
+                });
+            });
+        });
+
+        form.querySelectorAll("[data-clear-pillar]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const target = btn.getAttribute("data-clear-pillar");
+                productCheckboxes.forEach((input) => {
+                    if (input.dataset.pillar === target) {
+                        input.checked = false;
+                    }
+                });
+            });
+        });
+
+        saveButton?.addEventListener("click", () => {
+            const selectedProducts = getSelectedProducts();
+            updateHiddenInputs(selectedProducts);
+            collapsePanel();
+            submitForm();
+        });
+
+        clearAllButton?.addEventListener("click", () => {
+            productCheckboxes.forEach((input) => {
+                input.checked = false;
+            });
+            updateHiddenInputs(new Set());
+            collapsePanel();
+            submitForm();
+        });
+
+        activateDefaultPillar();
+        updateHiddenInputs(getSelectedProducts());
+    };
+
+    setupCollapsibles();
     setupAutoSubmitFilters();
+    setupPillarProductFilters("incident-filter-form");
+    setupPillarProductFilters("incident-table-filter-form");
+    setupPillarProductFilters("other-filter-form");
 
     const incidentTable = document.getElementById("incident-table");
 
