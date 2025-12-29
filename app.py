@@ -86,6 +86,11 @@ CADENCE_TO_INTERVAL = {
 }
 
 
+_EVENT_CACHE = {}
+_PRODUCT_KEY_CACHE = {}
+_CACHE_LOCK = threading.Lock()
+
+
 def _configure_logging(log_path=LOG_FILE):
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
@@ -649,29 +654,59 @@ def generate_osha_sign(auto_display=False, incidents=None):
 
 
 def load_events(path):
-    if not os.path.exists(path):
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
         return []
 
-    with open(path, "r") as f:
-        try:
+    with _CACHE_LOCK:
+        cached = _EVENT_CACHE.get(path)
+        if cached and cached["mtime"] == mtime:
+            return [dict(entry) for entry in cached["data"]]
+
+    try:
+        with open(path, "r") as f:
             data = json.load(f)
-        except json.JSONDecodeError:
-            return []
+    except (json.JSONDecodeError, OSError):
+        return []
 
     if not isinstance(data, list):
         return []
 
-    return [entry for entry in data if isinstance(entry, dict)]
+    cleaned = [dict(entry) for entry in data if isinstance(entry, dict)]
+
+    with _CACHE_LOCK:
+        _EVENT_CACHE[path] = {"mtime": mtime, "data": cleaned}
+
+    return [dict(entry) for entry in cleaned]
 
 
 def save_events(path, events):
     with open(path, "w") as f:
         json.dump(events, f, indent=2)
 
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return
+
+    with _CACHE_LOCK:
+        _EVENT_CACHE[path] = {
+            "mtime": mtime,
+            "data": [dict(event) for event in events if isinstance(event, dict)],
+        }
+
 
 def load_product_key():
-    if not os.path.exists(PRODUCT_KEY_FILE):
+    try:
+        mtime = os.path.getmtime(PRODUCT_KEY_FILE)
+    except OSError:
         return {}
+
+    with _CACHE_LOCK:
+        cached = _PRODUCT_KEY_CACHE.get(PRODUCT_KEY_FILE)
+        if cached and cached["mtime"] == mtime:
+            return dict(cached["data"])
 
     try:
         with open(PRODUCT_KEY_FILE, "r") as f:
@@ -682,8 +717,14 @@ def load_product_key():
     if not isinstance(data, dict):
         return {}
 
-    # Normalize keys to strip whitespace for consistent lookups
-    return {str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()}
+    normalized = {
+        str(k).strip(): str(v).strip() for k, v in data.items() if str(k).strip()
+    }
+
+    with _CACHE_LOCK:
+        _PRODUCT_KEY_CACHE[PRODUCT_KEY_FILE] = {"mtime": mtime, "data": normalized}
+
+    return dict(normalized)
 
 
 def normalize_field_mapping(raw_mapping):
@@ -1807,6 +1848,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     else:
         month_selection = None
 
+    product_filter_set = set(product_filter)
+    pillar_filter_set = set(pillar_filter)
+    rca_classification_filter_set = set(rca_classification_filter)
+    severity_filter_set = set(severity_filter)
+    event_type_filter_set = set(event_type_filter)
+
     def filter_and_group(
         events,
         *,
@@ -1820,24 +1867,31 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         dates_with_non_sev6 = set()
 
         for event in events:
-            if product_filter and event.get("product") not in product_filter:
+            if product_filter_set and event.get("product") not in product_filter_set:
                 continue
-            if pillar_filter and not product_filter and event.get("pillar") not in pillar_filter:
+            if (
+                pillar_filter_set
+                and not product_filter_set
+                and event.get("pillar") not in pillar_filter_set
+            ):
                 continue
-            if rca_classification_filter:
+            if rca_classification_filter_set:
                 if (
                     (event.get("event_type") or "Operational Incident")
                     == "Operational Incident"
-                    and event.get("rca_classification") not in rca_classification_filter
+                    and event.get("rca_classification")
+                    not in rca_classification_filter_set
                 ):
                     continue
-            if apply_event_type_filter and event_type_filter and event.get("event_type") not in event_type_filter:
+            if (
+                apply_event_type_filter
+                and event_type_filter_set
+                and event.get("event_type") not in event_type_filter_set
+            ):
                 continue
 
             if include_severity_filter and event.get("event_type") == "Operational Incident":
-                if severity_filter and not any(
-                    event.get("severity") == selected for selected in severity_filter
-                ):
+                if severity_filter_set and event.get("severity") not in severity_filter_set:
                     continue
 
             if (event.get("event_type") or "Operational Incident") == "Operational Incident":
