@@ -62,80 +62,157 @@
                     </div>
                 </div>
 
-                <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                <form class="control-form" method="GET" action="{{ url_for('index') }}" id="incident-filter-form">
                     <input type="hidden" name="year" value="{{ year }}" />
                     <input type="hidden" name="view" value="{{ view_mode }}" />
                     <input type="hidden" name="tab" value="incidents" />
                     {% if month_selection %}
                     <input type="hidden" name="month" value="{{ month_selection }}" />
                     {% endif %}
-                    <div class="control-row">
-                        <label>
-                            Pillar
-                            <select name="pillar">
-                                <option value="">All</option>
+
+                    <div class="filter-card">
+                        <div class="filter-card-header">
+                            <div>
+                                <p class="filter-card-title">Pillar &amp; product filters</p>
+                                <p class="helper-text small">Select products grouped by pillar, then save to apply.</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="ghost-button"
+                                data-collapsible-toggle="product-filter"
+                                aria-expanded="false"
+                                aria-controls="product-filter-panel"
+                            >
+                                Edit
+                            </button>
+                        </div>
+
+                        <div class="filter-summary-chips" data-product-summary>
+                            {% if product_filter %}
+                                {% for selected_product in product_filter %}
+                                    <span class="filter-chip">{{ selected_product }}</span>
+                                {% endfor %}
+                            {% elif pillar_filter %}
+                                {% for selected_pillar in pillar_filter %}
+                                    <span class="filter-chip">{{ selected_pillar }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="filter-chip muted">All products</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="collapsible" id="product-filter-panel" hidden>
+                            <div class="filter-actions">
+                                <button type="button" class="ghost-button" data-clear-all-products>Clear all filters</button>
+                                <button type="button" class="secondary-button" data-save-products>Save filters</button>
+                            </div>
+
+                            <div class="pillar-selector" role="tablist" aria-label="Pillars">
                                 {% for pillar in pillars %}
-                                <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Product
-                            <select name="product">
-                                <option value="">All</option>
-                                {% for product in products %}
-                                <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Severity
-                            <div class="dropdown severity-dropdown" id="severity-dropdown">
                                 <button
-                                    class="dropdown-toggle"
                                     type="button"
-                                    id="severity-dropdown-toggle"
-                                    aria-haspopup="true"
-                                    aria-expanded="false"
+                                    class="pill-button"
+                                    data-pillar-toggle="{{ pillar }}"
+                                    role="tab"
+                                    aria-controls="pillar-products-{{ loop.index }}"
+                                    aria-selected="false"
                                 >
-                                    <span id="severity-selection-label">
-                                        {% if severity_filter %}
-                                            {{ severity_filter | join(', ') }}
-                                        {% else %}
-                                            All
-                                        {% endif %}
-                                    </span>
-                                    <span aria-hidden="true">▾</span>
+                                    {{ pillar }}
                                 </button>
-                                <div class="dropdown-menu" id="severity-dropdown-menu" role="menu">
-                                    {% for severity in severities %}
-                                    <label class="checkbox-option">
+                                {% endfor %}
+                            </div>
+
+                            {% for pillar in pillars %}
+                            <div
+                                class="pillar-products"
+                                data-pillar-products="{{ pillar }}"
+                                id="pillar-products-{{ loop.index }}"
+                                role="tabpanel"
+                                hidden
+                            >
+                                <div class="product-panel-header">
+                                    <p class="product-panel-title">{{ pillar }} products</p>
+                                    <div class="product-panel-actions">
+                                        <button type="button" class="ghost-button" data-select-all="{{ pillar }}">Select all</button>
+                                        <button type="button" class="ghost-button" data-clear-pillar="{{ pillar }}">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="product-grid">
+                                    {% for product in products_by_pillar.get(pillar, []) %}
+                                    <label class="checkbox-option compact">
                                         <input
                                             type="checkbox"
-                                            name="severity"
-                                            value="{{ severity }}"
-                                            {% if severity in severity_filter %}checked{% endif %}
+                                            data-product-option
+                                            data-pillar="{{ pillar }}"
+                                            value="{{ product }}"
+                                            data-manual-submit="true"
+                                            {% if product_filter and product in product_filter %}checked{% endif %}
                                         />
-                                        {{ severity }}
+                                        {{ product }}
                                     </label>
                                     {% endfor %}
-                                    <p class="helper-text small">Select one or more severities to display.</p>
                                 </div>
                             </div>
-                        </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-                        <label>
-                            RCA Classification
-                            <select name="rca_classification">
-                                <option value="">All</option>
+                    <div class="filter-card">
+                        <div class="filter-card-header">
+                            <div>
+                                <p class="filter-card-title">RCA classifications</p>
+                                <p class="helper-text small">Collapse to adjust which classifications are shown.</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="ghost-button"
+                                data-collapsible-toggle="rca-filter"
+                                aria-expanded="false"
+                                aria-controls="rca-filter-panel"
+                            >
+                                Edit
+                            </button>
+                        </div>
+                        <div class="collapsible" id="rca-filter-panel" hidden>
+                            <div class="checkbox-row">
                                 {% for classification in rca_classifications %}
-                                <option value="{{ classification }}" {% if rca_classification_filter == classification %}selected{% endif %}>{{ classification }}</option>
+                                {% set rca_checked = (not rca_classification_param_supplied) or (classification in rca_classification_filter) %}
+                                <label class="checkbox-option compact">
+                                    <input
+                                        type="checkbox"
+                                        name="rca_classification"
+                                        value="{{ classification }}"
+                                        {% if rca_checked %}checked{% endif %}
+                                    />
+                                    {{ classification }}
+                                </label>
                                 {% endfor %}
-                            </select>
-                        </label>
+                            </div>
+                        </div>
+                    </div>
 
+                    <div class="filter-card">
+                        <div class="filter-card-header">
+                            <p class="filter-card-title">Severity</p>
+                            <p class="helper-text small">Toggle severities to update immediately.</p>
+                        </div>
+                        <div class="checkbox-row">
+                            {% for severity in severities %}
+                            {% set severity_checked = (not severity_param_supplied) or (severity in severity_filter) %}
+                            <label class="checkbox-option compact">
+                                <input
+                                    type="checkbox"
+                                    name="severity"
+                                    value="{{ severity }}"
+                                    {% if severity_checked %}checked{% endif %}
+                                />
+                                {{ severity }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="filter-card inline-options">
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
@@ -156,7 +233,15 @@
                             />
                             Show only multi-day incidents
                         </label>
+                    </div>
 
+                    <div id="product-filter-hidden-inputs" class="sr-only" aria-hidden="true">
+                        {% for pillar in pillar_filter %}
+                        <input type="hidden" name="pillar" value="{{ pillar }}" />
+                        {% endfor %}
+                        {% for product in product_filter %}
+                        <input type="hidden" name="product" value="{{ product }}" />
+                        {% endfor %}
                     </div>
                 </form>
 
@@ -201,7 +286,8 @@
                             </div>
                         </div>
                         <div class="export-title">
-                            {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
+                            {{ pillar_filter|join(', ') if pillar_filter else "All Pillars" }} -
+                            {{ product_filter|join(', ') if product_filter else "All Products" }}
                         </div>
                     </div>
 
@@ -259,79 +345,151 @@
                 </div>
             </div>
 
-            <form class="control-form" method="GET" action="{{ url_for('index') }}">
+            <form class="control-form" method="GET" action="{{ url_for('index') }}" id="incident-table-filter-form">
                 <input type="hidden" name="year" value="{{ year }}" />
                 <input type="hidden" name="view" value="{{ view_mode }}" />
                 <input type="hidden" name="tab" value="table" />
                 {% if month_selection %}
                 <input type="hidden" name="month" value="{{ month_selection }}" />
                 {% endif %}
-                <div class="control-row">
-                    <label>
-                        Pillar
-                        <select name="pillar">
-                            <option value="">All</option>
+
+                <div class="filter-card compact">
+                    <div class="filter-card-header">
+                        <div>
+                            <p class="filter-card-title">Pillar &amp; product filters</p>
+                            <p class="helper-text small">Save to update the table view.</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="ghost-button"
+                            data-collapsible-toggle="table-product-filter"
+                            aria-expanded="false"
+                            aria-controls="table-product-filter-panel"
+                        >
+                            Edit
+                        </button>
+                    </div>
+                    <div class="filter-summary-chips" data-product-summary>
+                        {% if product_filter %}
+                            {% for selected_product in product_filter %}
+                                <span class="filter-chip">{{ selected_product }}</span>
+                            {% endfor %}
+                        {% elif pillar_filter %}
+                            {% for selected_pillar in pillar_filter %}
+                                <span class="filter-chip">{{ selected_pillar }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="filter-chip muted">All products</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="collapsible" id="table-product-filter-panel" hidden>
+                        <div class="filter-actions">
+                            <button type="button" class="ghost-button" data-clear-all-products>Clear all filters</button>
+                            <button type="button" class="secondary-button" data-save-products>Save filters</button>
+                        </div>
+
+                        <div class="pillar-selector" role="tablist" aria-label="Pillars">
                             {% for pillar in pillars %}
-                            <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-
-                    <label>
-                        Product
-                        <select name="product">
-                            <option value="">All</option>
-                            {% for product in products %}
-                            <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-
-                    <label>
-                        Severity
-                        <div class="dropdown severity-dropdown" id="severity-dropdown-table">
                             <button
-                                class="dropdown-toggle"
                                 type="button"
-                                id="severity-dropdown-toggle-table"
-                                aria-haspopup="true"
-                                aria-expanded="false"
+                                class="pill-button"
+                                data-pillar-toggle="{{ pillar }}"
+                                role="tab"
+                                aria-controls="table-pillar-products-{{ loop.index }}"
+                                aria-selected="false"
                             >
-                                <span id="severity-selection-label-table">
-                                    {% if severity_filter %}
-                                        {{ severity_filter | join(', ') }}
-                                    {% else %}
-                                        All
-                                    {% endif %}
-                                </span>
-                                <span aria-hidden="true">▾</span>
+                                {{ pillar }}
                             </button>
-                            <div class="dropdown-menu" id="severity-dropdown-menu-table" role="menu">
-                                {% for severity in severities %}
-                                <label class="checkbox-option">
+                            {% endfor %}
+                        </div>
+
+                        {% for pillar in pillars %}
+                        <div
+                            class="pillar-products"
+                            data-pillar-products="{{ pillar }}"
+                            id="table-pillar-products-{{ loop.index }}"
+                            role="tabpanel"
+                            hidden
+                        >
+                            <div class="product-panel-header">
+                                <p class="product-panel-title">{{ pillar }} products</p>
+                                <div class="product-panel-actions">
+                                    <button type="button" class="ghost-button" data-select-all="{{ pillar }}">Select all</button>
+                                    <button type="button" class="ghost-button" data-clear-pillar="{{ pillar }}">Clear</button>
+                                </div>
+                            </div>
+                            <div class="product-grid">
+                                {% for product in products_by_pillar.get(pillar, []) %}
+                                <label class="checkbox-option compact">
                                     <input
                                         type="checkbox"
-                                        name="severity"
-                                        value="{{ severity }}"
-                                        {% if severity in severity_filter %}checked{% endif %}
+                                        data-product-option
+                                        data-pillar="{{ pillar }}"
+                                        value="{{ product }}"
+                                        data-manual-submit="true"
+                                        {% if product_filter and product in product_filter %}checked{% endif %}
                                     />
-                                    {{ severity }}
+                                    {{ product }}
                                 </label>
                                 {% endfor %}
-                                <p class="helper-text small">Select one or more severities to display.</p>
                             </div>
                         </div>
-                    </label>
+                        {% endfor %}
+                    </div>
+                </div>
 
-                    <label>
-                        RCA Classification
-                        <select name="rca_classification">
-                            <option value="">All</option>
+                <div class="filter-card compact">
+                    <div class="filter-card-header">
+                        <p class="filter-card-title">RCA classifications</p>
+                        <p class="helper-text small">Collapse to adjust visible classifications.</p>
+                    </div>
+                    <div class="collapsible" id="table-rca-filter-panel" hidden>
+                        <div class="checkbox-row">
                             {% for classification in rca_classifications %}
-                            <option value="{{ classification }}" {% if rca_classification_filter == classification %}selected{% endif %}>{{ classification }}</option>
+                            {% set rca_checked = (not rca_classification_param_supplied) or (classification in rca_classification_filter) %}
+                            <label class="checkbox-option compact">
+                                <input
+                                    type="checkbox"
+                                    name="rca_classification"
+                                    value="{{ classification }}"
+                                    {% if rca_checked %}checked{% endif %}
+                                />
+                                {{ classification }}
+                            </label>
                             {% endfor %}
-                        </select>
-                    </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-card compact">
+                    <div class="filter-card-header">
+                        <p class="filter-card-title">Severity</p>
+                        <p class="helper-text small">Changes apply instantly.</p>
+                    </div>
+                    <div class="checkbox-row">
+                        {% for severity in severities %}
+                        {% set severity_checked = (not severity_param_supplied) or (severity in severity_filter) %}
+                        <label class="checkbox-option compact">
+                            <input
+                                type="checkbox"
+                                name="severity"
+                                value="{{ severity }}"
+                                {% if severity_checked %}checked{% endif %}
+                            />
+                            {{ severity }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="table-product-filter-hidden-inputs" class="sr-only" aria-hidden="true">
+                    {% for pillar in pillar_filter %}
+                    <input type="hidden" name="pillar" value="{{ pillar }}" />
+                    {% endfor %}
+                    {% for product in product_filter %}
+                    <input type="hidden" name="product" value="{{ product }}" />
+                    {% endfor %}
                 </div>
             </form>
 
@@ -483,70 +641,140 @@
                     </div>
                 </div>
 
-                <form class="control-form" method="GET" action="{{ url_for('index') }}">
+                <form class="control-form" method="GET" action="{{ url_for('index') }}" id="other-filter-form">
                     <input type="hidden" name="year" value="{{ year }}" />
                     <input type="hidden" name="view" value="{{ view_mode }}" />
                     <input type="hidden" name="tab" value="others" />
                     {% if month_selection %}
                     <input type="hidden" name="month" value="{{ month_selection }}" />
                     {% endif %}
-                    <div class="control-row">
-                        <label>
-                            Pillar
-                            <select name="pillar">
-                                <option value="">All</option>
+
+                    <div class="filter-card compact">
+                        <div class="filter-card-header">
+                            <div>
+                                <p class="filter-card-title">Pillar &amp; product filters</p>
+                                <p class="helper-text small">Save to update other events.</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="ghost-button"
+                                data-collapsible-toggle="other-product-filter"
+                                aria-expanded="false"
+                                aria-controls="other-product-filter-panel"
+                            >
+                                Edit
+                            </button>
+                        </div>
+                        <div class="filter-summary-chips" data-product-summary>
+                            {% if product_filter %}
+                                {% for selected_product in product_filter %}
+                                    <span class="filter-chip">{{ selected_product }}</span>
+                                {% endfor %}
+                            {% elif pillar_filter %}
+                                {% for selected_pillar in pillar_filter %}
+                                    <span class="filter-chip">{{ selected_pillar }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="filter-chip muted">All products</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="collapsible" id="other-product-filter-panel" hidden>
+                            <div class="filter-actions">
+                                <button type="button" class="ghost-button" data-clear-all-products>Clear all filters</button>
+                                <button type="button" class="secondary-button" data-save-products>Save filters</button>
+                            </div>
+
+                            <div class="pillar-selector" role="tablist" aria-label="Pillars">
                                 {% for pillar in pillars %}
-                                <option value="{{ pillar }}" {% if pillar_filter == pillar %}selected{% endif %}>{{ pillar }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Product
-                            <select name="product">
-                                <option value="">All</option>
-                                {% for product in products %}
-                                <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>{{ product }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-
-                        <label>
-                            Event Type
-                            <div class="dropdown" id="event-type-dropdown">
                                 <button
-                                    class="dropdown-toggle"
                                     type="button"
-                                    id="event-type-dropdown-toggle"
-                                    aria-haspopup="true"
-                                    aria-expanded="false"
+                                    class="pill-button"
+                                    data-pillar-toggle="{{ pillar }}"
+                                    role="tab"
+                                    aria-controls="other-pillar-products-{{ loop.index }}"
+                                    aria-selected="false"
                                 >
-                                    <span id="event-type-selection-label">
-                                        {% if event_type_filter %}
-                                            {{ event_type_filter | join(', ') }}
-                                        {% else %}
-                                            All
-                                        {% endif %}
-                                    </span>
-                                    <span aria-hidden="true">▾</span>
+                                    {{ pillar }}
                                 </button>
-                                <div class="dropdown-menu" id="event-type-dropdown-menu" role="menu">
-                                    {% for event_type in event_types %}
-                                    <label class="checkbox-option">
+                                {% endfor %}
+                            </div>
+
+                            {% for pillar in pillars %}
+                            <div
+                                class="pillar-products"
+                                data-pillar-products="{{ pillar }}"
+                                id="other-pillar-products-{{ loop.index }}"
+                                role="tabpanel"
+                                hidden
+                            >
+                                <div class="product-panel-header">
+                                    <p class="product-panel-title">{{ pillar }} products</p>
+                                    <div class="product-panel-actions">
+                                        <button type="button" class="ghost-button" data-select-all="{{ pillar }}">Select all</button>
+                                        <button type="button" class="ghost-button" data-clear-pillar="{{ pillar }}">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="product-grid">
+                                    {% for product in products_by_pillar.get(pillar, []) %}
+                                    <label class="checkbox-option compact">
                                         <input
                                             type="checkbox"
-                                            name="event_type"
-                                            value="{{ event_type }}"
-                                            {% if event_type in event_type_filter %}checked{% endif %}
+                                            data-product-option
+                                            data-pillar="{{ pillar }}"
+                                            value="{{ product }}"
+                                            data-manual-submit="true"
+                                            {% if product_filter and product in product_filter %}checked{% endif %}
                                         />
-                                        {{ event_type }}
+                                        {{ product }}
                                     </label>
                                     {% endfor %}
-                                    <p class="helper-text small">Select one or more event types to display.</p>
                                 </div>
                             </div>
-                        </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
+                    <div class="filter-card compact">
+                        <div class="filter-card-header">
+                            <p class="filter-card-title">Event type</p>
+                            <p class="helper-text small">Applies immediately.</p>
+                        </div>
+                        <div class="dropdown" id="event-type-dropdown">
+                            <button
+                                class="dropdown-toggle"
+                                type="button"
+                                id="event-type-dropdown-toggle"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                            >
+                                <span id="event-type-selection-label">
+                                    {% if event_type_filter %}
+                                        {{ event_type_filter | join(', ') }}
+                                    {% else %}
+                                        All
+                                    {% endif %}
+                                </span>
+                                <span aria-hidden="true">▾</span>
+                            </button>
+                            <div class="dropdown-menu" id="event-type-dropdown-menu" role="menu">
+                                {% for event_type in event_types %}
+                                <label class="checkbox-option">
+                                    <input
+                                        type="checkbox"
+                                        name="event_type"
+                                        value="{{ event_type }}"
+                                        {% if event_type in event_type_filter %}checked{% endif %}
+                                    />
+                                    {{ event_type }}
+                                </label>
+                                {% endfor %}
+                                <p class="helper-text small">Select one or more event types to display.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filter-card inline-options compact">
                         <label class="checkbox-inline">
                             <input
                                 type="checkbox"
@@ -567,7 +795,15 @@
                             />
                             Show only multi-day events
                         </label>
+                    </div>
 
+                    <div id="other-product-filter-hidden-inputs" class="sr-only" aria-hidden="true">
+                        {% for pillar in pillar_filter %}
+                        <input type="hidden" name="pillar" value="{{ pillar }}" />
+                        {% endfor %}
+                        {% for product in product_filter %}
+                        <input type="hidden" name="product" value="{{ product }}" />
+                        {% endfor %}
                     </div>
                 </form>
 
@@ -605,7 +841,8 @@
                             </span>
                         </div>
                         <div class="export-title">
-                            {{ pillar_filter or "All Pillars" }} - {{ product_filter or "All Products" }}
+                            {{ pillar_filter|join(', ') if pillar_filter else "All Pillars" }} -
+                            {{ product_filter|join(', ') if product_filter else "All Products" }}
                         </div>
                     </div>
 

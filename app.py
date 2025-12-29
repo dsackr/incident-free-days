@@ -1671,12 +1671,13 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     other_multi_day_only = other_duration_enabled and request.args.get(
         "other_multi_day"
     ) == "1"
-    pillar_filter = request.args.get("pillar") or None
-    product_filter = request.args.get("product") or None
+    pillar_filter = [value for value in request.args.getlist("pillar") if value]
+    product_filter = [value for value in request.args.getlist("product") if value]
     severity_params = [value for value in request.args.getlist("severity") if value]
     event_type_params = [value for value in request.args.getlist("event_type") if value]
-    rca_classification_filter = request.args.get("rca_classification") or None
+    rca_classification_filter = [value for value in request.args.getlist("rca_classification") if value]
     severity_param_supplied = "severity" in request.args
+    rca_classification_param_supplied = "rca_classification" in request.args
     key_missing = request.args.get("key_missing") == "1"
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
@@ -1787,16 +1788,15 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         event_type_filter = []
 
     if product_filter:
-        resolved_pillar = product_pillar_map.get(product_filter) or resolve_pillar(
-            product_filter, mapping=key_mapping
-        )
-        if resolved_pillar:
-            pillar_filter = resolved_pillar
+        resolved_pillars = set(pillar_filter)
+        for product_value in product_filter:
+            resolved_pillar = product_pillar_map.get(product_value) or resolve_pillar(
+                product_value, mapping=key_mapping
+            )
+            if resolved_pillar:
+                resolved_pillars.add(resolved_pillar)
 
-    if pillar_filter:
-        products = products_by_pillar.get(pillar_filter, [])
-        if product_filter and product_filter not in products:
-            product_filter = None
+        pillar_filter = sorted(resolved_pillars)
 
     if view_mode == "monthly":
         if month_selection is None:
@@ -1820,15 +1820,15 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         dates_with_non_sev6 = set()
 
         for event in events:
-            if pillar_filter and event.get("pillar") != pillar_filter:
+            if product_filter and event.get("product") not in product_filter:
                 continue
-            if product_filter and event.get("product") != product_filter:
+            if pillar_filter and not product_filter and event.get("pillar") not in pillar_filter:
                 continue
             if rca_classification_filter:
                 if (
                     (event.get("event_type") or "Operational Incident")
                     == "Operational Incident"
-                    and event.get("rca_classification") != rca_classification_filter
+                    and event.get("rca_classification") not in rca_classification_filter
                 ):
                     continue
             if apply_event_type_filter and event_type_filter and event.get("event_type") not in event_type_filter:
@@ -1963,12 +1963,37 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             if other_multi_day_only:
                 params["other_multi_day"] = "1"
 
-        if kind != "pillar" and pillar_filter:
-            params["pillar"] = pillar_filter
-        if kind != "product" and product_filter:
-            params["product"] = product_filter
-        if kind != "rca" and rca_classification_filter:
-            params["rca_classification"] = rca_classification_filter
+        def remaining(values, to_remove=None):
+            if not values:
+                return []
+            if to_remove is None:
+                return list(values)
+            return [val for val in values if val != to_remove]
+
+        pillars_remaining = (
+            remaining(pillar_filter, value if kind == "pillar" else None)
+            if kind == "pillar"
+            else pillar_filter
+        )
+        products_remaining = (
+            remaining(product_filter, value if kind == "product" else None)
+            if kind == "product"
+            else product_filter
+        )
+        rca_remaining = (
+            remaining(rca_classification_filter, value if kind == "rca" else None)
+            if kind == "rca"
+            else rca_classification_filter
+        )
+
+        if pillars_remaining:
+            params["pillar"] = pillars_remaining
+        if products_remaining:
+            params["product"] = products_remaining
+        if rca_remaining:
+            params["rca_classification"] = rca_remaining
+        elif rca_classification_param_supplied:
+            params["rca_classification"] = [""]
 
         if target_tab == "incidents":
             if kind == "severity":
@@ -1993,42 +2018,42 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
         return url_for("index", **params)
 
-    if pillar_filter:
+    for pillar in pillar_filter:
         incident_filters.append(
             {
                 "label": "Pillar",
-                "value": pillar_filter,
-                "remove_link": build_remove_link("pillar", tab="incidents"),
+                "value": pillar,
+                "remove_link": build_remove_link("pillar", pillar, tab="incidents"),
             }
         )
         other_filters.append(
             {
                 "label": "Pillar",
-                "value": pillar_filter,
-                "remove_link": build_remove_link("pillar", tab="others"),
+                "value": pillar,
+                "remove_link": build_remove_link("pillar", pillar, tab="others"),
             }
         )
-    if product_filter:
+    for product in product_filter:
         incident_filters.append(
             {
                 "label": "Product",
-                "value": product_filter,
-                "remove_link": build_remove_link("product", tab="incidents"),
+                "value": product,
+                "remove_link": build_remove_link("product", product, tab="incidents"),
             }
         )
         other_filters.append(
             {
                 "label": "Product",
-                "value": product_filter,
-                "remove_link": build_remove_link("product", tab="others"),
+                "value": product,
+                "remove_link": build_remove_link("product", product, tab="others"),
             }
         )
-    if rca_classification_filter:
+    for rca_classification in rca_classification_filter:
         incident_filters.append(
             {
                 "label": "RCA Classification",
-                "value": rca_classification_filter,
-                "remove_link": build_remove_link("rca", tab="incidents"),
+                "value": rca_classification,
+                "remove_link": build_remove_link("rca", rca_classification, tab="incidents"),
             }
         )
     if severity_filter:
@@ -2076,6 +2101,8 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 params["severity"] = [""]
             if rca_classification_filter:
                 params["rca_classification"] = rca_classification_filter
+            elif rca_classification_param_supplied:
+                params["rca_classification"] = [""]
         if target_tab == "others" and event_type_filter:
             params["event_type"] = event_type_filter
         return url_for("index", **params)
@@ -2138,7 +2165,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         pillar_filter=pillar_filter,
         product_filter=product_filter,
         rca_classification_filter=rca_classification_filter,
+        rca_classification_param_supplied=rca_classification_param_supplied,
         severity_filter=severity_filter,
+        severity_param_supplied=severity_param_supplied,
         event_type_filter=event_type_filter,
         calendar=calendar,
         incidents_by_date=incidents_by_date,
