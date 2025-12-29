@@ -1,4 +1,12 @@
 document.addEventListener("DOMContentLoaded", function () {
+    const loadingOverlay = document.getElementById("loading-overlay");
+
+    const showLoadingOverlay = () => {
+        if (!loadingOverlay) return;
+        loadingOverlay.removeAttribute("hidden");
+        loadingOverlay.setAttribute("aria-hidden", "false");
+    };
+
     const buttons = document.querySelectorAll(".tab-button");
     const contents = document.querySelectorAll(".tab-content");
 
@@ -256,12 +264,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
         forms.forEach((form) => {
             const triggerSubmit = () => {
+                showLoadingOverlay();
                 if (typeof form.requestSubmit === "function") {
                     form.requestSubmit();
                 } else {
                     form.submit();
                 }
             };
+
+            form.addEventListener("submit", showLoadingOverlay);
 
             const inputs = form.querySelectorAll("select, input[type='checkbox']");
             inputs.forEach((input) => {
