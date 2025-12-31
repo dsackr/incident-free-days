@@ -576,6 +576,7 @@
                     <thead>
                         <tr>
                             <th data-sort-key="inc_number" aria-sort="none">Incident</th>
+                            <th>Jira Link</th>
                             <th data-sort-key="product" aria-sort="none">Product</th>
                             <th data-sort-key="pillar" aria-sort="none">Pillar</th>
                             <th data-sort-key="severity" aria-sort="none">Severity</th>
@@ -590,6 +591,13 @@
                         {% for incident in incidents %}
                         {% set incident_id = incident.inc_number or incident.id or '' %}
                         {% set incident_url_id = incident_id.replace('INC-', '') if incident_id else '' %}
+                        {% set incident_label = incident.inc_number or incident.id %}
+                        {% set external_ref = incident.external_issue_reference or {} %}
+                        {% set jira_link = external_ref.issue_permalink if external_ref.provider == 'jira' else None %}
+                        {% set jira_url = jira_link or incident.permalink %}
+                        {% if not jira_url and incident_url_id %}
+                            {% set jira_url = 'https://app.incident.io/myfrontline/incidents/' ~ incident_url_id %}
+                        {% endif %}
                         {% set duration_label = incident.client_impact_duration_label or incident.client_impact_duration_seconds %}
                         <tr
                             data-inc_number="{{ incident_id }}"
@@ -610,8 +618,19 @@
                                         rel="noopener noreferrer"
                                         class="incident-link"
                                     >
-                                        {{ incident.inc_number or incident.id }}
+                                        {{ incident_label }}
                                     </a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if jira_url and incident_label %}
+                                    <a href="{{ jira_url }}" target="_blank" rel="noopener noreferrer" class="incident-link">
+                                        {{ incident_label }}
+                                    </a>
+                                {% elif incident_label %}
+                                    {{ incident_label }}
                                 {% else %}
                                     —
                                 {% endif %}

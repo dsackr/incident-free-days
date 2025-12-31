@@ -135,14 +135,27 @@ document.addEventListener("DOMContentLoaded", function () {
                 const row = document.createElement("div");
                 row.className = "incident-row";
                 const incidentTitle = () => {
-                    const label = inc.inc_number || "Incident";
-                    if (!inc.inc_number) return label;
+                    const label = inc.inc_number || inc.id || inc.title || "Incident";
+                    const externalRef = inc.external_issue_reference || {};
 
-                    const incidentId = inc.inc_number.replace(/^INC-/i, "");
-                    const idForUrl = incidentId || inc.inc_number;
-                    const url = `https://app.incident.io/myfrontline/incidents/${encodeURIComponent(
-                        idForUrl
-                    )}`;
+                    const url = (() => {
+                        if (externalRef.provider === "jira" && externalRef.issue_permalink) {
+                            return externalRef.issue_permalink;
+                        }
+
+                        if (inc.permalink) return inc.permalink;
+
+                        if (!inc.inc_number && !inc.id) return "";
+
+                        const incidentId = (inc.inc_number || inc.id || "").replace(/^INC-/i, "");
+                        const idForUrl = incidentId || inc.inc_number || inc.id;
+                        if (!idForUrl) return "";
+
+                        return `https://app.incident.io/myfrontline/incidents/${encodeURIComponent(idForUrl)}`;
+                    })();
+
+                    if (!url) return label;
+
                     return `<a class="incident-link" href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
                 };
                 const extraMeta = [];
