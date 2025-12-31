@@ -1468,6 +1468,9 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
         or inc_number
     )
 
+    permalink = api_incident.get("permalink")
+    external_issue_reference = api_incident.get("external_issue_reference") or {}
+
     client_impact_seconds = _extract_client_impact_duration_seconds(api_incident)
 
     payloads = []
@@ -1491,6 +1494,8 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "title": title,
                 "rca_classification": rca_classification,
                 "client_impact_duration_seconds": client_impact_seconds,
+                "permalink": permalink,
+                "external_issue_reference": external_issue_reference,
             }
         )
 
