@@ -266,6 +266,31 @@ h1 {
     margin: 12px 0;
 }
 
+.filters-panel {
+    border: 1px solid #d9e5f4;
+    border-radius: 6px;
+    background: #ffffff;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.filters-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.filters-panel .filter-card {
+    margin-bottom: 8px;
+}
+
+.filters-panel .filter-actions {
+    justify-content: flex-start;
+}
+
 .filter-card {
     border: 1px solid #d9e5f4;
     border-radius: 6px;

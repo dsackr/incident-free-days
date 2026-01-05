@@ -1708,6 +1708,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     year_str = request.args.get("year")
     view_mode = request.args.get("view", "yearly")
     month_str = request.args.get("month")
+    quarter_str = request.args.get("quarter")
     incident_duration_enabled = request.args.get("incident_duration") == "1"
     incident_multi_day_only = incident_duration_enabled and request.args.get(
         "incident_multi_day"
@@ -1751,8 +1752,25 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     except ValueError:
         month_selection = None
 
-    if view_mode not in {"yearly", "monthly"}:
+    try:
+        quarter_selection = int(quarter_str) if quarter_str else None
+    except ValueError:
+        quarter_selection = None
+
+    if view_mode not in {"yearly", "monthly", "quarterly"}:
         view_mode = "yearly"
+
+    current_month = date.today().month
+    if view_mode == "monthly":
+        month_selection = month_selection or current_month
+        quarter_selection = (month_selection - 1) // 3 + 1
+    elif view_mode == "quarterly":
+        if quarter_selection not in {1, 2, 3, 4}:
+            source_month = month_selection or current_month
+            quarter_selection = (source_month - 1) // 3 + 1
+        month_selection = None
+    else:
+        month_selection = None
 
     incidents = [
         event
@@ -1959,6 +1977,20 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     if view_mode == "monthly" and month_selection:
         days_in_range = calendar.monthrange(year, month_selection)[1]
         days_with_incidents = {d for d in incident_dates if d.month == month_selection}
+    elif view_mode == "quarterly" and quarter_selection:
+        start_month = (quarter_selection - 1) * 3 + 1
+        end_month = start_month + 2
+        start_date = date(year, start_month, 1)
+        end_of_end_month = calendar.monthrange(year, end_month)[1]
+        end_date = date(year, end_month, end_of_end_month)
+        today = date.today()
+        effective_end = min(end_date, today) if year == today.year else end_date
+        days_in_range = max((effective_end - start_date).days + 1, 0)
+        days_with_incidents = {
+            d
+            for d in incident_dates
+            if d.month in {start_month, start_month + 1, end_month}
+        }
     else:
         days_in_range = (date(year + 1, 1, 1) - date(year, 1, 1)).days
         days_with_incidents = incident_dates
@@ -1999,9 +2031,16 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     incident_months = build_calendar(year, incidents_by_date, classify_operational)
     other_months = build_calendar(year, other_by_date, classify_other)
 
+    def months_for_quarter(months, quarter):
+        start_index = (quarter - 1) * 3
+        return months[start_index : start_index + 3]
+
     if view_mode == "monthly" and month_selection:
         incident_months = [incident_months[month_selection - 1]]
         other_months = [other_months[month_selection - 1]]
+    elif view_mode == "quarterly" and quarter_selection:
+        incident_months = months_for_quarter(incident_months, quarter_selection)
+        other_months = months_for_quarter(other_months, quarter_selection)
 
     incident_filters = []
     other_filters = []
@@ -2011,6 +2050,8 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         params = {"view": view_mode, "year": year, "tab": target_tab}
         if month_selection:
             params["month"] = month_selection
+        if quarter_selection:
+            params["quarter"] = quarter_selection
         if target_tab == "incidents":
             if incident_duration_enabled:
                 params["incident_duration"] = "1"
@@ -2134,11 +2175,13 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 }
             )
 
-    def build_link(target_view, target_year, target_month=None, tab=None):
+    def build_link(target_view, target_year, target_month=None, tab=None, target_quarter=None):
         target_tab = tab or active_tab
         params = {"view": target_view, "year": target_year, "tab": target_tab}
-        if target_month:
+        if target_view == "monthly" and target_month:
             params["month"] = target_month
+        if target_view == "quarterly" and target_quarter:
+            params["quarter"] = target_quarter
         if target_tab == "incidents":
             if incident_duration_enabled:
                 params["incident_duration"] = "1"
@@ -2182,14 +2225,32 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
         prev_link = build_link("monthly", prev_year, prev_month)
         next_link = build_link("monthly", next_year, next_month)
+    elif view_mode == "quarterly" and quarter_selection:
+        current_period_label = f"Q{quarter_selection} {year}"
+        prev_year = year
+        prev_quarter = quarter_selection - 1
+        if prev_quarter < 1:
+            prev_quarter = 4
+            prev_year -= 1
+
+        next_year = year
+        next_quarter = quarter_selection + 1
+        if next_quarter > 4:
+            next_quarter = 1
+            next_year += 1
+
+        prev_link = build_link("quarterly", prev_year, target_quarter=prev_quarter)
+        next_link = build_link("quarterly", next_year, target_quarter=next_quarter)
     else:
         current_period_label = str(year)
         prev_link = build_link("yearly", year - 1)
         next_link = build_link("yearly", year + 1)
 
     target_month_for_toggle = month_selection or date.today().month
+    target_quarter_for_toggle = quarter_selection or ((target_month_for_toggle - 1) // 3 + 1)
     yearly_view_link = build_link("yearly", year)
     monthly_view_link = build_link("monthly", year, target_month_for_toggle)
+    quarterly_view_link = build_link("quarterly", year, target_quarter=target_quarter_for_toggle)
 
     # sort newest-first for display
     incidents_sorted = sorted(
@@ -2214,6 +2275,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         other_events=other_sorted,
         view_mode=view_mode,
         month_selection=month_selection,
+        quarter_selection=quarter_selection,
         pillars=pillars,
         products=products,
         severities=severities,
@@ -2240,6 +2302,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         current_period_label=current_period_label,
         yearly_view_link=yearly_view_link,
         monthly_view_link=monthly_view_link,
+        quarterly_view_link=quarterly_view_link,
         incident_duration_enabled=incident_duration_enabled,
         incident_multi_day_only=incident_multi_day_only,
         other_duration_enabled=other_duration_enabled,
