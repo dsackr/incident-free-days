@@ -272,29 +272,6 @@ document.addEventListener("DOMContentLoaded", function () {
         inputName: "event_type",
     });
 
-    const setupAutoSubmitFilters = () => {
-        const forms = document.querySelectorAll(".control-form");
-
-        forms.forEach((form) => {
-            const triggerSubmit = () => {
-                showLoadingOverlay();
-                if (typeof form.requestSubmit === "function") {
-                    form.requestSubmit();
-                } else {
-                    form.submit();
-                }
-            };
-
-            form.addEventListener("submit", showLoadingOverlay);
-
-            const inputs = form.querySelectorAll("select, input[type='checkbox']");
-            inputs.forEach((input) => {
-                if (input.dataset.manualSubmit === "true") return;
-                input.addEventListener("change", triggerSubmit);
-            });
-        });
-    };
-
     const setupCollapsibles = () => {
         document.querySelectorAll("[data-collapsible-toggle]").forEach((btn) => {
             const panelId = btn.getAttribute("aria-controls") || `${btn.dataset.collapsibleToggle}-panel`;
@@ -415,14 +392,6 @@ document.addEventListener("DOMContentLoaded", function () {
             return pillarsForProducts;
         };
 
-        const submitForm = () => {
-            if (typeof form.requestSubmit === "function") {
-                form.requestSubmit();
-            } else {
-                form.submit();
-            }
-        };
-
         const productPanel = form.querySelector("[id$='product-filter-panel']");
         const collapsePanel = () => {
             if (!productPanel) return;
@@ -453,6 +422,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         input.checked = true;
                     }
                 });
+                updateHiddenInputs(getSelectedProducts());
             });
         });
 
@@ -464,6 +434,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         input.checked = false;
                     }
                 });
+                updateHiddenInputs(getSelectedProducts());
             });
         });
 
@@ -471,7 +442,6 @@ document.addEventListener("DOMContentLoaded", function () {
             const selectedProducts = getSelectedProducts();
             updateHiddenInputs(selectedProducts);
             collapsePanel();
-            submitForm();
         });
 
         clearAllButton?.addEventListener("click", () => {
@@ -480,18 +450,59 @@ document.addEventListener("DOMContentLoaded", function () {
             });
             updateHiddenInputs(new Set());
             collapsePanel();
-            submitForm();
+        });
+
+        productCheckboxes.forEach((input) => {
+            input.addEventListener("change", () => {
+                updateHiddenInputs(getSelectedProducts());
+            });
         });
 
         activateDefaultPillar();
         updateHiddenInputs(getSelectedProducts());
+
+        form._syncProductFilters = () => updateHiddenInputs(getSelectedProducts());
     };
 
     setupCollapsibles();
-    setupAutoSubmitFilters();
     setupPillarProductFilters("incident-filter-form");
     setupPillarProductFilters("incident-table-filter-form");
     setupPillarProductFilters("other-filter-form");
+
+    const collapsePanelById = (form, panelId) => {
+        if (!panelId) return;
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        panel.setAttribute("hidden", "hidden");
+        const toggle = form.querySelector(`[aria-controls='${panelId}']`);
+        toggle?.setAttribute("aria-expanded", "false");
+    };
+
+    const setupSaveButtons = (formId, panelId) => {
+        const form = document.getElementById(formId);
+        if (!form) return;
+
+        form.addEventListener("submit", showLoadingOverlay);
+        const saveButton = form.querySelector("[data-save-filters]");
+        if (!saveButton) return;
+
+        saveButton.addEventListener("click", () => {
+            if (typeof form._syncProductFilters === "function") {
+                form._syncProductFilters();
+            }
+            collapsePanelById(form, panelId);
+
+            if (typeof form.requestSubmit === "function") {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        });
+    };
+
+    setupSaveButtons("incident-filter-form", "incident-filters-panel");
+    setupSaveButtons("incident-table-filter-form", "table-filters-panel");
+    setupSaveButtons("other-filter-form", "other-filters-panel");
 
     const incidentTable = document.getElementById("incident-table");
 
