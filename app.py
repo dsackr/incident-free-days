@@ -613,8 +613,8 @@ def generate_osha_sign(auto_display=False, incidents=None):
     prior_text = str(data.get("prior_count", 0))
     prior_bbox = draw.textbbox((0, 0), prior_text, font=count_font)
     prior_width = prior_bbox[2] - prior_bbox[0]
-    prior_x = 250 - (prior_width // 2)
-    prior_y = 660
+    prior_x = 240 - (prior_width // 2)
+    prior_y = 670
     draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
     if data.get("prior_count_has_same_day_skips"):
         asterisk_text = "*"
@@ -652,9 +652,9 @@ def generate_osha_sign(auto_display=False, incidents=None):
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
-        "Change": (920, 595),
-        "Deploy": (920, 665),
-        "Missed": (920, 735),
+        "Change": (920, 590),
+        "Deploy": (920, 660),
+        "Missed": (920, 730),
     }
 
     if data.get("reason") in reason_positions:
