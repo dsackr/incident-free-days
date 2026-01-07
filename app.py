@@ -614,7 +614,7 @@ def generate_osha_sign(auto_display=False, incidents=None):
     prior_bbox = draw.textbbox((0, 0), prior_text, font=count_font)
     prior_width = prior_bbox[2] - prior_bbox[0]
     prior_x = 250 - (prior_width // 2)
-    prior_y = 650
+    prior_y = 660
     draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
     if data.get("prior_count_has_same_day_skips"):
         asterisk_text = "*"
@@ -628,8 +628,8 @@ def generate_osha_sign(auto_display=False, incidents=None):
     inc_text = data.get("incident_number", "")
     inc_bbox = draw.textbbox((0, 0), inc_text, font=inc_font)
     inc_width = inc_bbox[2] - inc_bbox[0]
-    inc_x = (img_width // 2) - (inc_width // 2) + 10
-    inc_y = 670
+    inc_x = (img_width // 2) - (inc_width // 2)
+    inc_y = 660
     draw.text((inc_x, inc_y), inc_text, font=inc_font, fill="white")
 
     incident_date_text = ""
@@ -648,13 +648,13 @@ def generate_osha_sign(auto_display=False, incidents=None):
         date_x = (img_width // 2) - (date_width // 2) + 50
         # Add a little extra spacing so the date sits lower in the red box
         # (roughly 20px lower than before, leaving it just above the yellow border).
-        date_y = inc_y + inc_height + 30
+        date_y = inc_y + inc_height + 40
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
-        "Change": (920, 615),
-        "Deploy": (920, 685),
-        "Missed": (920, 745),
+        "Change": (920, 595),
+        "Deploy": (920, 665),
+        "Missed": (920, 735),
     }
 
     if data.get("reason") in reason_positions:
