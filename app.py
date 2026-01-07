@@ -652,9 +652,9 @@ def generate_osha_sign(auto_display=False, incidents=None):
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
-        "Change": (990, 595),
-        "Deploy": (990, 665),
-        "Missed": (990, 725),
+        "Change": (930, 605),
+        "Deploy": (930, 675),
+        "Missed": (930, 735),
     }
 
     if data.get("reason") in reason_positions:
