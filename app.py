@@ -252,7 +252,18 @@ def compute_osha_state_from_incidents(incidents, raw_data=None):
         previous = procedural[1] if len(procedural) > 1 else None
 
         incident_date = latest["incident_date"]
-        previous_date = previous["incident_date"] if previous else None
+        prior_entry = previous
+        if previous and previous["incident_date"] == incident_date:
+            prior_entry = next(
+                (
+                    entry
+                    for entry in procedural[1:]
+                    if entry["incident_date"] < incident_date
+                ),
+                None,
+            )
+
+        previous_date = prior_entry["incident_date"] if prior_entry else None
 
         data = {
             "incident_number": _normalize_incident_number(
