@@ -672,6 +672,35 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(state["days_since"], 3)
         self.assertEqual(state["prior_count"], 7)
 
+    def test_compute_osha_state_from_incidents_skips_same_day_prior(self):
+        today = date.today()
+        incidents = [
+            {
+                "inc_number": "INC-300",
+                "date": (today - timedelta(days=1)).isoformat(),
+                "rca_classification": "Deploy",
+            },
+            {
+                "inc_number": "INC-250",
+                "date": (today - timedelta(days=1)).isoformat(),
+                "rca_classification": "Change",
+            },
+            {
+                "inc_number": "INC-200",
+                "date": (today - timedelta(days=9)).isoformat(),
+                "rca_classification": "Change",
+            },
+        ]
+
+        state = app.compute_osha_state_from_incidents(incidents)
+
+        self.assertEqual(state["incident_number"], "300")
+        self.assertEqual(state["prior_count"], 8)
+        self.assertEqual(
+            state["prior_incident_date"],
+            (today - timedelta(days=9)).isoformat(),
+        )
+
     def test_compute_osha_state_from_incidents_fallbacks_to_saved_data(self):
         today = date.today()
         stored = {
