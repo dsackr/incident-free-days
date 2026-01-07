@@ -613,8 +613,11 @@ def generate_osha_sign(auto_display=False, incidents=None):
     prior_text = str(data.get("prior_count", 0))
     prior_bbox = draw.textbbox((0, 0), prior_text, font=count_font)
     prior_width = prior_bbox[2] - prior_bbox[0]
-    prior_x = 290 - (prior_width // 2)
-    prior_y = 630
+    bottom_row_shift_x = -20
+    bottom_row_shift_y = 20
+
+    prior_x = 290 - (prior_width // 2) + bottom_row_shift_x
+    prior_y = 630 + bottom_row_shift_y
     draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
     if data.get("prior_count_has_same_day_skips"):
         asterisk_text = "*"
@@ -628,8 +631,8 @@ def generate_osha_sign(auto_display=False, incidents=None):
     inc_text = data.get("incident_number", "")
     inc_bbox = draw.textbbox((0, 0), inc_text, font=inc_font)
     inc_width = inc_bbox[2] - inc_bbox[0]
-    inc_x = (img_width // 2) - (inc_width // 2) + 70
-    inc_y = 650
+    inc_x = (img_width // 2) - (inc_width // 2) + 70 + bottom_row_shift_x
+    inc_y = 650 + bottom_row_shift_y
     draw.text((inc_x, inc_y), inc_text, font=inc_font, fill="white")
 
     incident_date_text = ""
@@ -645,16 +648,16 @@ def generate_osha_sign(auto_display=False, incidents=None):
         inc_height = inc_bbox[3] - inc_bbox[1]
         date_bbox = draw.textbbox((0, 0), incident_date_text, font=inc_date_font)
         date_width = date_bbox[2] - date_bbox[0]
-        date_x = (img_width // 2) - (date_width // 2) + 70
+        date_x = (img_width // 2) - (date_width // 2) + 70 + bottom_row_shift_x
         # Add a little extra spacing so the date sits lower in the red box
         # (roughly 20px lower than before, leaving it just above the yellow border).
         date_y = inc_y + inc_height + 30
         draw.text((date_x, date_y), incident_date_text, font=inc_date_font, fill="white")
 
     reason_positions = {
-        "Change": (1010, 575),
-        "Deploy": (1010, 645),
-        "Missed": (1010, 705),
+        "Change": (1010 + bottom_row_shift_x, 575 + bottom_row_shift_y),
+        "Deploy": (1010 + bottom_row_shift_x, 645 + bottom_row_shift_y),
+        "Missed": (1010 + bottom_row_shift_x, 705 + bottom_row_shift_y),
     }
 
     if data.get("reason") in reason_positions:
