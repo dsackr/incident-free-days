@@ -37,8 +37,6 @@ DATA_FILE = os.path.join(BASE_DIR, "incidents.json")
 OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
-DEFAULT_YEAR = 2025
-
 OSHA_DATA_FILE = os.path.join(BASE_DIR, "osha_data.json")
 OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
@@ -77,6 +75,7 @@ DEFAULT_FIELD_MAPPING = {
 
 RECENT_SYNC_EVENT_LIMIT = 25
 DEFAULT_SYNC_WINDOW_DAYS = 14
+AUTO_SYNC_WINDOW_DAYS = 30
 AUTO_SYNC_POLL_SECONDS = 300
 DISPLAY_FRAME_BYTES = 192000
 CADENCE_TO_INTERVAL = {
@@ -866,15 +865,23 @@ def is_auto_sync_due(config, *, now=None):
     return now - last_synced_at >= interval
 
 
+def build_auto_sync_window(now=None):
+    now = now or datetime.now(timezone.utc)
+    end_date = now.date()
+    start_date = end_date - timedelta(days=AUTO_SYNC_WINDOW_DAYS - 1)
+    return start_date.isoformat(), end_date.isoformat()
+
+
 def auto_sync_loop(stop_event):
     while not stop_event.is_set():
         try:
             config = load_sync_config()
             if is_auto_sync_due(config):
+                start_date, end_date = build_auto_sync_window()
                 sync_incidents_from_api(
                     dry_run=False,
-                    start_date=config.get("start_date") or None,
-                    end_date=config.get("end_date") or None,
+                    start_date=start_date,
+                    end_date=end_date,
                     token=config.get("token") or os.getenv("INCIDENT_IO_API_TOKEN"),
                     base_url=config.get("base_url") or None,
                     include_samples=False,
@@ -1764,11 +1771,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     sync_config_raw = load_sync_config()
     sync_config = build_sync_config_view(sync_config_raw)
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
+    current_year = date.today().year
 
     try:
-        year = int(year_str) if year_str else DEFAULT_YEAR
+        year = int(year_str) if year_str else current_year
     except ValueError:
-        year = DEFAULT_YEAR
+        year = current_year
 
     try:
         month_selection = int(month_str) if month_str else None
@@ -2349,11 +2357,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 @app.route("/graphs", methods=["GET"])
 def graphs_view():
     year_param = request.args.get("year")
+    current_year = date.today().year
 
     try:
-        year = int(year_param) if year_param else DEFAULT_YEAR
+        year = int(year_param) if year_param else current_year
     except ValueError:
-        year = DEFAULT_YEAR
+        year = current_year
 
     incidents = [
         event
