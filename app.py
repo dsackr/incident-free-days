@@ -620,8 +620,9 @@ def generate_osha_sign(auto_display=False, incidents=None):
         asterisk_text = "*"
         asterisk_bbox = draw.textbbox((0, 0), asterisk_text, font=asterisk_font)
         asterisk_width = asterisk_bbox[2] - asterisk_bbox[0]
+        asterisk_height = asterisk_bbox[3] - asterisk_bbox[1]
         asterisk_x = prior_x + prior_width + 6
-        asterisk_y = prior_y - (asterisk_bbox[3] - asterisk_bbox[1]) + 10
+        asterisk_y = prior_y - (asterisk_height // 2)
         draw.text((asterisk_x, asterisk_y), asterisk_text, font=asterisk_font, fill="white")
 
     inc_text = data.get("incident_number", "")
