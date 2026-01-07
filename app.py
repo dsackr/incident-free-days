@@ -659,7 +659,7 @@ def generate_osha_sign(auto_display=False, incidents=None):
 
     if data.get("reason") in reason_positions:
         check_x, check_y = reason_positions[data["reason"]]
-        draw.text((check_x, check_y), "✓", font=check_font, fill="blue")
+        draw.text((check_x, check_y), "✓", font=check_font, fill="black")
 
     img.save(OSHA_OUTPUT_IMAGE)
 
