@@ -253,6 +253,7 @@ def compute_osha_state_from_incidents(incidents, raw_data=None):
 
         incident_date = latest["incident_date"]
         prior_entry = previous
+        skipped_same_day = False
         if previous and previous["incident_date"] == incident_date:
             prior_entry = next(
                 (
@@ -262,6 +263,7 @@ def compute_osha_state_from_incidents(incidents, raw_data=None):
                 ),
                 None,
             )
+            skipped_same_day = prior_entry is not None
 
         previous_date = prior_entry["incident_date"] if prior_entry else None
 
@@ -273,6 +275,7 @@ def compute_osha_state_from_incidents(incidents, raw_data=None):
             "prior_incident_date": previous_date.isoformat() if previous_date else "",
             "days_since": max((date.today() - incident_date).days, 0),
             "prior_count": max((incident_date - previous_date).days, 0) if previous_date else 0,
+            "prior_count_has_same_day_skips": skipped_same_day,
             "reason": _infer_osha_reason(latest["classification"]),
             "last_reset": datetime.now().isoformat(),
         }
@@ -593,11 +596,12 @@ def generate_osha_sign(auto_display=False, incidents=None):
     try:
         days_font = ImageFont.truetype(font_path, 400)
         count_font = ImageFont.truetype(font_path, 150)
+        asterisk_font = ImageFont.truetype(font_path, 60)
         inc_font = ImageFont.truetype(font_path, 100)
         inc_date_font = ImageFont.truetype(font_path, 30)
         check_font = ImageFont.truetype(font_path, 80)
     except OSError:
-        days_font = count_font = inc_font = inc_date_font = check_font = ImageFont.load_default()
+        days_font = count_font = asterisk_font = inc_font = inc_date_font = check_font = ImageFont.load_default()
 
     days_text = str(data.get("days_since", 0))
     days_bbox = draw.textbbox((0, 0), days_text, font=days_font)
@@ -612,6 +616,13 @@ def generate_osha_sign(auto_display=False, incidents=None):
     prior_x = 290 - (prior_width // 2)
     prior_y = 630
     draw.text((prior_x, prior_y), prior_text, font=count_font, fill="white")
+    if data.get("prior_count_has_same_day_skips"):
+        asterisk_text = "*"
+        asterisk_bbox = draw.textbbox((0, 0), asterisk_text, font=asterisk_font)
+        asterisk_width = asterisk_bbox[2] - asterisk_bbox[0]
+        asterisk_x = prior_x + prior_width + 6
+        asterisk_y = prior_y - (asterisk_bbox[3] - asterisk_bbox[1]) + 10
+        draw.text((asterisk_x, asterisk_y), asterisk_text, font=asterisk_font, fill="white")
 
     inc_text = data.get("incident_number", "")
     inc_bbox = draw.textbbox((0, 0), inc_text, font=inc_font)
