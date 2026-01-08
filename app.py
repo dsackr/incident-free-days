@@ -1476,6 +1476,9 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
         return []
 
     products = _get_catalog_custom_values(api_incident, "Product", default="Unknown")
+    normalized_products = [p for p in products if p and p.casefold() != "unknown"]
+    if normalized_products:
+        products = normalized_products
     pillar_values = _get_catalog_custom_values(
         api_incident, "Solution Pillar", default="Unknown"
     )

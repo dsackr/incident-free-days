@@ -133,6 +133,31 @@ class IncidentSyncTests(unittest.TestCase):
             self.assertEqual(payload["date"], "2024-07-09")
             self.assertEqual(payload["reported_at"], "2024-07-09T21:00:00-04:00")
 
+    def test_normalize_incident_payloads_drops_unknown_when_products_present(self):
+        api_incident = {
+            "reference": "INC-321",
+            "severity": {"name": "Sev2"},
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2024-09-01T05:30:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [
+                        {"value_catalog_entry": {"name": "Product Z"}},
+                        {"value_catalog_entry": {"name": "Unknown"}},
+                    ],
+                }
+            ],
+        }
+
+        payloads = app.normalize_incident_payloads(api_incident)
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0]["product"], "Product Z")
+
     def test_normalize_incident_payloads_uses_incident_type(self):
         api_incident = {
             "reference": "INC-777",
