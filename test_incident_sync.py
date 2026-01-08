@@ -502,6 +502,56 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(summary["added_incidents"], 1)
         self.assertEqual(len(summary.get("samples", [])), 1)
 
+    @mock.patch("incident_io_client.fetch_incidents")
+    def test_sync_removes_unknown_when_known_product_arrives(self, mock_fetch_incidents):
+        with open(self.incidents_file, "w", encoding="utf-8") as f:
+            json.dump(
+                [
+                    {
+                        "inc_number": "INC-732",
+                        "product": "Unknown",
+                        "pillar": "Unknown",
+                        "event_type": "Operational Incident",
+                        "reported_at": "2026-01-06T14:16:00-05:00",
+                    }
+                ],
+                f,
+            )
+
+        api_incident = {
+            "reference": "INC-732",
+            "incident_timestamp_values": [
+                {
+                    "incident_timestamp": {"name": "Reported at"},
+                    "value": {"value": "2026-01-06T19:16:00Z"},
+                }
+            ],
+            "custom_field_entries": [
+                {
+                    "custom_field": {"name": "Product"},
+                    "values": [{"value_catalog_entry": {"name": "Absence Management"}}],
+                }
+            ],
+        }
+
+        mock_fetch_incidents.return_value = [api_incident]
+
+        summary = app.sync_incidents_from_api(
+            dry_run=False,
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+
+        self.assertEqual(summary["added_incidents"], 1)
+
+        with open(self.incidents_file, "r", encoding="utf-8") as f:
+            stored = json.load(f)
+
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0]["product"], "Absence Management")
+
     @mock.patch("incident_io_client.requests")
     def test_fetch_incidents_handles_pagination_meta(self, mock_requests):
         first_payload = {
