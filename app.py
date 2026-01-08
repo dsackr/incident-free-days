@@ -1559,6 +1559,26 @@ def sync_incidents_from_api(
     mapping = load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
 
+    def is_unknown_product(product_value):
+        return (product_value or "").strip().casefold() in {"", "unknown"}
+
+    def purge_unknown_entries(collection, lookup, seen, inc_numbers):
+        if not inc_numbers:
+            return
+
+        retained = []
+        for entry in collection:
+            inc_number = entry.get("inc_number")
+            product = entry.get("product")
+            lookup_key = (inc_number, (product or "").strip())
+            if inc_number in inc_numbers and is_unknown_product(product):
+                lookup.pop(lookup_key, None)
+                seen.discard(lookup_key)
+                continue
+            retained.append(entry)
+
+        collection[:] = retained
+
     incidents = load_events(incidents_file)
     other_events = load_events(other_events_file)
 
@@ -1635,6 +1655,33 @@ def sync_incidents_from_api(
                 continue
 
             filtered_payloads.append(payload)
+
+        known_operational_inc_numbers = {
+            payload.get("inc_number")
+            for payload in filtered_payloads
+            if payload.get("event_type") == "Operational Incident"
+            and not is_unknown_product(payload.get("product"))
+        }
+        known_other_inc_numbers = {
+            payload.get("inc_number")
+            for payload in filtered_payloads
+            if payload.get("event_type") != "Operational Incident"
+            and not is_unknown_product(payload.get("product"))
+        }
+
+        if not dry_run:
+            purge_unknown_entries(
+                incidents,
+                incident_lookup,
+                incident_seen,
+                known_operational_inc_numbers,
+            )
+            purge_unknown_entries(
+                other_events,
+                other_lookup,
+                other_seen,
+                known_other_inc_numbers,
+            )
 
         for payload in filtered_payloads:
             lookup_key = (payload.get("inc_number"), (payload.get("product") or "").strip())
