@@ -1185,6 +1185,22 @@ h1 {
     background: #eef4ff;
 }
 
+.incidents-table td.rca-missing-stale {
+    background: #f8b4b4;
+    color: #7f1d1d;
+    font-weight: 600;
+}
+
+.incidents-table td.rca-missing-recent {
+    background: #fde68a;
+    color: #92400e;
+    font-weight: 600;
+}
+
+.incidents-table tr.incident-row-procedural td {
+    background: #fdba74;
+}
+
 .table-wrapper {
     overflow-x: auto;
 }

@@ -1958,6 +1958,11 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     severity_filter_set = set(severity_filter)
     event_type_filter_set = set(event_type_filter)
 
+    quarter_months = None
+    if view_mode == "quarterly" and quarter_selection:
+        start_month = (quarter_selection - 1) * 3 + 1
+        quarter_months = {start_month, start_month + 1, start_month + 2}
+
     def filter_and_group(
         events,
         *,
@@ -2011,12 +2016,15 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             if multi_day_only and len(set(covered_dates)) < 2:
                 continue
 
-            in_month_view = view_mode == "monthly" and month_selection
-            if in_month_view:
+            if view_mode == "monthly" and month_selection:
                 covered_dates = [
                     d
                     for d in covered_dates
                     if d.year == year and d.month == month_selection
+                ]
+            elif view_mode == "quarterly" and quarter_months:
+                covered_dates = [
+                    d for d in covered_dates if d.year == year and d.month in quarter_months
                 ]
             else:
                 covered_dates = [d for d in covered_dates if d.year == year]
@@ -2332,6 +2340,32 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     yearly_view_link = build_link("yearly", year)
     monthly_view_link = build_link("monthly", year, target_month_for_toggle)
     quarterly_view_link = build_link("quarterly", year, target_quarter=target_quarter_for_toggle)
+
+    today = date.today()
+
+    def annotate_incident_for_table(incident):
+        rca_classification = (incident.get("rca_classification") or "").strip()
+        normalized = rca_classification.casefold()
+        is_procedural = (
+            bool(rca_classification)
+            and "procedural" in normalized
+            and "non-procedural" not in normalized
+            and "non procedural" not in normalized
+        )
+        incident["table_row_class"] = "incident-row-procedural" if is_procedural else ""
+
+        if not rca_classification:
+            incident_date = parse_date(incident.get("reported_at") or incident.get("date"))
+            age_days = (today - incident_date).days if incident_date else None
+            if age_days is not None and age_days < 5:
+                incident["rca_cell_class"] = "rca-missing-recent"
+            else:
+                incident["rca_cell_class"] = "rca-missing-stale"
+        else:
+            incident["rca_cell_class"] = ""
+
+    for incident in incidents_filtered:
+        annotate_incident_for_table(incident)
 
     # sort newest-first for display
     incidents_sorted = sorted(
