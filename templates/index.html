@@ -370,9 +370,14 @@
                     <p class="helper-text">Browse the same incidents in a sortable, filterable table.</p>
                 </div>
                 <div class="table-actions">
+                    <div class="view-toggle" role="group" aria-label="Table view toggle">
+                        <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                        <a class="icon-button {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
+                        <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                    </div>
                     <a
                         class="icon-button"
-                        href="{{ url_for('index', tab='incidents', view=view_mode, year=year, month=month_selection, pillar=pillar_filter, product=product_filter, rca_classification=rca_classification_filter, severity=severity_filter) }}"
+                        href="{{ url_for('index', tab='incidents', view=view_mode, year=year, month=month_selection, quarter=quarter_selection, pillar=pillar_filter, product=product_filter, rca_classification=rca_classification_filter, severity=severity_filter) }}"
                     >
                         Back to calendar
                     </a>
@@ -655,6 +660,7 @@
                         {% endif %}
                         {% set duration_label = incident.client_impact_duration_label or incident.client_impact_duration_seconds %}
                         <tr
+                            class="{{ incident.table_row_class }}"
                             data-inc_number="{{ incident_id }}"
                             data-product="{{ incident.product or '' }}"
                             data-pillar="{{ incident.pillar or '' }}"
@@ -693,7 +699,7 @@
                             <td>{{ incident.product or '—' }}</td>
                             <td>{{ incident.pillar or '—' }}</td>
                             <td>{{ incident.severity or '—' }}</td>
-                            <td>{{ incident.rca_classification or '—' }}</td>
+                            <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
                             <td>{{ incident.reported_at or incident.date or '—' }}</td>
                             <td>{{ incident.closed_at or '—' }}</td>
                             <td>{{ duration_label or '—' }}</td>
