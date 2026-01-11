@@ -51,6 +51,7 @@ OSHA_USE_LOCAL_EINK = os.getenv("OSHA_USE_LOCAL_EINK", "false").lower() in {
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
+MISSING_RCA_VALUES = {"not classified", "unknown", "unclassified"}
 
 # 6-color palette for E-Paper display
 OSHA_PALETTE = {
@@ -2346,6 +2347,11 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     def annotate_incident_for_table(incident):
         rca_classification = (incident.get("rca_classification") or "").strip()
         normalized = rca_classification.casefold()
+        is_missing_rca = (
+            not rca_classification
+            or normalized in MISSING_RCA_VALUES
+            or normalized.startswith("not classified")
+        )
         is_procedural = (
             bool(rca_classification)
             and "procedural" in normalized
@@ -2354,7 +2360,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         )
         incident["table_row_class"] = "incident-row-procedural" if is_procedural else ""
 
-        if not rca_classification:
+        if is_missing_rca:
             incident_date = parse_date(incident.get("reported_at") or incident.get("date"))
             age_days = (today - incident_date).days if incident_date else None
             if age_days is not None and age_days < 5:
