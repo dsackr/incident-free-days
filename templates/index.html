@@ -375,6 +375,10 @@
                         <a class="icon-button {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
                         <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
                     </div>
+                    <div class="view-toggle" role="group" aria-label="Incident table view toggle">
+                        <a class="icon-button {% if not weekly_roundup %}active{% endif %}" href="{{ table_view_link }}">Table</a>
+                        <a class="icon-button {% if weekly_roundup %}active{% endif %}" href="{{ weekly_roundup_link }}">Weekly Roundup</a>
+                    </div>
                     <a
                         class="icon-button"
                         href="{{ url_for('index', tab='incidents', view=view_mode, year=year, month=month_selection, quarter=quarter_selection, pillar=pillar_filter, product=product_filter, rca_classification=rca_classification_filter, severity=severity_filter) }}"
@@ -388,6 +392,14 @@
                 <input type="hidden" name="year" value="{{ year }}" />
                 <input type="hidden" name="view" value="{{ view_mode }}" />
                 <input type="hidden" name="tab" value="table" />
+                {% if weekly_roundup %}
+                <input type="hidden" name="weekly_roundup" value="1" />
+                <input type="hidden" name="roundup_start" value="{{ roundup_start_value }}" />
+                <input type="hidden" name="roundup_end" value="{{ roundup_end_value }}" />
+                {% if missing_only %}
+                <input type="hidden" name="missing_only" value="1" />
+                {% endif %}
+                {% endif %}
                 {% if month_selection %}
                 <input type="hidden" name="month" value="{{ month_selection }}" />
                 {% endif %}
@@ -559,153 +571,282 @@
                 </div>
             </form>
 
-            <div class="filter-summary">
-                {% if incident_filters %}
-                    <span class="filter-summary-label">Current filters:</span>
-                    <div class="filter-chip-row">
-                        {% for active_filter in incident_filters %}
-                            <a class="filter-chip removable" href="{{ active_filter.remove_link }}&tab=table">
-                                <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
-                                <span class="filter-chip-close" aria-hidden="true">×</span>
-                                <span class="sr-only">Remove {{ active_filter.label }} filter</span>
-                            </a>
-                        {% endfor %}
+            {% if weekly_roundup %}
+                <div class="weekly-roundup-controls">
+                    <div>
+                        <h3>Weekly Roundup</h3>
+                        <p class="helper-text small">Using app timezone for Monday–Sunday rollups.</p>
                     </div>
-                {% else %}
-                    <span class="filter-summary-label">Current filters: All</span>
-                {% endif %}
-            </div>
+                    <div class="weekly-roundup-actions">
+                        <button type="button" class="secondary-button" id="weekly-roundup-copy">Copy for email</button>
+                        <button type="button" class="ghost-button" id="weekly-roundup-download">Download HTML</button>
+                    </div>
+                </div>
 
-            <div class="incident-metrics">
-                <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
-                <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
-            </div>
-
-            <div class="table-control-panel">
-                <div class="control-row table-control-row">
-                    <label>
-                        Sort by
-                        <select id="incident-table-sort" aria-label="Sort incidents by column">
-                            <option value="reported_at" selected>Date</option>
-                            <option value="inc_number">Incident</option>
-                            <option value="pillar">Pillar</option>
-                            <option value="product">Product</option>
-                            <option value="title">Title</option>
-                            <option value="duration_seconds">Client impact duration</option>
-                            <option value="rca_classification">RCA Classification</option>
-                            <option value="incident_lead">Incident Lead</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        Direction
-                        <select id="incident-table-direction" aria-label="Sort direction">
-                            <option value="desc" selected>Newest / highest first</option>
-                            <option value="asc">Oldest / lowest first</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        Filter column
-                        <select id="incident-table-filter-column" aria-label="Filter incidents by column">
-                            <option value="all" selected>All columns</option>
-                            <option value="inc_number">Incident</option>
-                            <option value="pillar">Pillar</option>
-                            <option value="product">Product</option>
-                            <option value="title">Title</option>
-                            <option value="rca_classification">RCA Classification</option>
-                            <option value="incident_lead">Incident Lead</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        Filter text
-                        <input
-                            type="text"
-                            id="incident-table-filter-text"
-                            placeholder="Search within the selected column"
-                            aria-label="Filter text"
-                        />
+                <div class="weekly-roundup-toolbar">
+                    <form class="weekly-roundup-form" method="GET" action="{{ url_for('index') }}">
+                        <input type="hidden" name="tab" value="table" />
+                        <input type="hidden" name="view" value="{{ view_mode }}" />
+                        <input type="hidden" name="year" value="{{ year }}" />
+                        <input type="hidden" name="weekly_roundup" value="1" />
+                        {% if month_selection %}
+                        <input type="hidden" name="month" value="{{ month_selection }}" />
+                        {% endif %}
+                        {% if quarter_selection %}
+                        <input type="hidden" name="quarter" value="{{ quarter_selection }}" />
+                        {% endif %}
+                        {% for pillar in pillar_filter %}
+                        <input type="hidden" name="pillar" value="{{ pillar }}" />
+                        {% endfor %}
+                        {% for product in product_filter %}
+                        <input type="hidden" name="product" value="{{ product }}" />
+                        {% endfor %}
+                        {% for rca in rca_classification_filter %}
+                        <input type="hidden" name="rca_classification" value="{{ rca }}" />
+                        {% endfor %}
+                        {% for severity in severity_filter %}
+                        <input type="hidden" name="severity" value="{{ severity }}" />
+                        {% endfor %}
+                        <label>
+                            Week start
+                            <input type="date" name="roundup_start" value="{{ roundup_start_value }}" />
+                        </label>
+                        <label>
+                            Week end
+                            <input type="date" name="roundup_end" value="{{ roundup_end_value }}" />
+                        </label>
+                        <button type="submit" class="secondary-button">Apply range</button>
+                    </form>
+                    <label class="checkbox-option compact weekly-roundup-toggle">
+                        <input type="checkbox" id="weekly-missing-toggle" {% if missing_only %}checked{% endif %} />
+                        Missing data only
                     </label>
                 </div>
-            </div>
 
-            <div class="table-scroll">
-                <table class="incidents-table" id="incident-table">
-                    <thead>
-                        <tr>
-                            <th data-sort-key="reported_at" aria-sort="descending">Date</th>
-                            <th data-sort-key="inc_number" aria-sort="none">Incident</th>
-                            <th>Jira Link</th>
-                            <th data-sort-key="pillar" aria-sort="none">Pillar</th>
-                            <th data-sort-key="product" aria-sort="none">Product</th>
-                            <th data-sort-key="title" aria-sort="none">Title</th>
-                            <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
-                            <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
-                            <th data-sort-key="incident_lead" aria-sort="none">Incident Lead</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for incident in incidents %}
-                        {% set incident_id = incident.inc_number or incident.id or '' %}
-                        {% set incident_url_id = incident_id.replace('INC-', '') if incident_id else '' %}
-                        {% set incident_label = incident.inc_number or incident.id %}
-                        {% set external_ref = incident.external_issue_reference or {} %}
-                        {% set jira_link = external_ref.issue_permalink if external_ref.provider == 'jira' else None %}
-                        {% set jira_url = jira_link or incident.permalink %}
-                        {% if not jira_url and incident_url_id %}
-                            {% set jira_url = 'https://app.incident.io/myfrontline/incidents/' ~ incident_url_id %}
-                        {% endif %}
-                        {% set duration_label = incident.client_impact_duration_label or incident.client_impact_duration_seconds %}
-                        <tr
-                            class="{{ incident.table_row_class }}"
-                            data-inc_number="{{ incident_id }}"
-                            data-product="{{ incident.product or '' }}"
-                            data-pillar="{{ incident.pillar or '' }}"
-                            data-title="{{ incident.title or '' }}"
-                            data-rca_classification="{{ incident.rca_classification or '' }}"
-                            data-reported_at="{{ incident.reported_at or incident.date or '' }}"
-                            data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
-                            data-severity="{{ incident.severity or '' }}"
-                            data-incident_lead="{{ incident.incident_lead or '' }}"
-                        >
-                            <td>{{ incident.reported_at_display or '—' }}</td>
-                            <td>
-                                {% if incident_id %}
-                                    <a
-                                        href="https://app.incident.io/myfrontline/incidents/{{ incident_url_id or incident_id }}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="incident-link"
-                                    >
-                                        {{ incident_label }}
-                                    </a>
+                <p class="helper-text small weekly-roundup-status" id="weekly-roundup-copy-status" role="status" aria-live="polite"></p>
+
+                {% for week in weekly_roundup_weeks %}
+                <div class="table-card weekly-roundup-card">
+                    <div class="table-card-header">
+                        <div>
+                            <h4>{{ week.label }}</h4>
+                            <p class="helper-text small">{{ week.range_label }}</p>
+                        </div>
+                        <div class="weekly-roundup-stats">
+                            <span class="stat-chip">Incidents: {{ week.incident_count }}</span>
+                            <span class="stat-chip">Total client impact: {{ week.total_duration_label }}</span>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="incidents-table weekly-roundup-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Incident</th>
+                                    <th>Jira</th>
+                                    <th>Product</th>
+                                    <th>Client impact duration</th>
+                                    <th>RCA Classification</th>
+                                    <th>Completeness</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if week.incidents %}
+                                    {% for incident in week.incidents %}
+                                    <tr data-missing="{{ 'true' if incident.missing_fields else 'false' }}">
+                                        <td>{{ incident.reported_at_display }}</td>
+                                        <td>
+                                            {% if incident.incident_url and incident.incident_id %}
+                                                <a class="incident-link" href="{{ incident.incident_url }}" target="_blank" rel="noopener noreferrer">
+                                                    {{ incident.incident_label }}
+                                                </a>
+                                            {% else %}
+                                                {{ incident.incident_label }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if incident.jira_url and incident.incident_id %}
+                                                <a class="incident-link" href="{{ incident.jira_url }}" target="_blank" rel="noopener noreferrer">
+                                                    {{ incident.incident_label }}
+                                                </a>
+                                            {% else %}
+                                                —
+                                            {% endif %}
+                                        </td>
+                                        <td class="{% if incident.missing_product %}missing-field{% endif %}">{{ incident.product or 'Missing' }}</td>
+                                        <td class="{% if incident.missing_duration %}missing-field{% endif %}">{{ incident.duration_label }}</td>
+                                        <td class="{% if incident.missing_rca %}missing-field{% endif %}">{{ incident.rca_classification }}</td>
+                                        <td>
+                                            <span
+                                                class="quality-badge {{ incident.completeness_class }}"
+                                                {% if incident.missing_fields %}
+                                                title="Missing: {{ incident.missing_fields | join(', ') }}"
+                                                {% endif %}
+                                            >
+                                                {{ incident.completeness_label }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
                                 {% else %}
-                                    —
+                                    <tr>
+                                        <td colspan="7">No incidents in this window.</td>
+                                    </tr>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if jira_url and incident_label %}
-                                    <a href="{{ jira_url }}" target="_blank" rel="noopener noreferrer" class="incident-link">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="filter-summary">
+                    {% if incident_filters %}
+                        <span class="filter-summary-label">Current filters:</span>
+                        <div class="filter-chip-row">
+                            {% for active_filter in incident_filters %}
+                                <a class="filter-chip removable" href="{{ active_filter.remove_link }}&tab=table">
+                                    <span class="filter-chip-text">{{ active_filter.label }}: {{ active_filter.value }}</span>
+                                    <span class="filter-chip-close" aria-hidden="true">×</span>
+                                    <span class="sr-only">Remove {{ active_filter.label }} filter</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <span class="filter-summary-label">Current filters: All</span>
+                    {% endif %}
+                </div>
+
+                <div class="incident-metrics">
+                    <div class="incident-count">Total incidents (unique IDs): {{ incident_count }}</div>
+                    <div class="incident-free">Incident-free days in range: {{ incident_free_days }}</div>
+                </div>
+
+                <div class="table-control-panel">
+                    <div class="control-row table-control-row">
+                        <label>
+                            Sort by
+                            <select id="incident-table-sort" aria-label="Sort incidents by column">
+                                <option value="reported_at" selected>Date</option>
+                                <option value="inc_number">Incident</option>
+                                <option value="pillar">Pillar</option>
+                                <option value="product">Product</option>
+                                <option value="title">Title</option>
+                                <option value="duration_seconds">Client impact duration</option>
+                                <option value="rca_classification">RCA Classification</option>
+                                <option value="incident_lead">Incident Lead</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Direction
+                            <select id="incident-table-direction" aria-label="Sort direction">
+                                <option value="desc" selected>Newest / highest first</option>
+                                <option value="asc">Oldest / lowest first</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Filter column
+                            <select id="incident-table-filter-column" aria-label="Filter incidents by column">
+                                <option value="all" selected>All columns</option>
+                                <option value="inc_number">Incident</option>
+                                <option value="pillar">Pillar</option>
+                                <option value="product">Product</option>
+                                <option value="title">Title</option>
+                                <option value="rca_classification">RCA Classification</option>
+                                <option value="incident_lead">Incident Lead</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Filter text
+                            <input
+                                type="text"
+                                id="incident-table-filter-text"
+                                placeholder="Search within the selected column"
+                                aria-label="Filter text"
+                            />
+                        </label>
+                    </div>
+                </div>
+
+                <div class="table-scroll">
+                    <table class="incidents-table" id="incident-table">
+                        <thead>
+                            <tr>
+                                <th data-sort-key="reported_at" aria-sort="descending">Date</th>
+                                <th data-sort-key="inc_number" aria-sort="none">Incident</th>
+                                <th>Jira Link</th>
+                                <th data-sort-key="pillar" aria-sort="none">Pillar</th>
+                                <th data-sort-key="product" aria-sort="none">Product</th>
+                                <th data-sort-key="title" aria-sort="none">Title</th>
+                                <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
+                                <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
+                                <th data-sort-key="incident_lead" aria-sort="none">Incident Lead</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for incident in incidents %}
+                            {% set incident_id = incident.inc_number or incident.id or '' %}
+                            {% set incident_url_id = incident_id.replace('INC-', '') if incident_id else '' %}
+                            {% set incident_label = incident.inc_number or incident.id %}
+                            {% set external_ref = incident.external_issue_reference or {} %}
+                            {% set jira_link = external_ref.issue_permalink if external_ref.provider == 'jira' else None %}
+                            {% set jira_url = jira_link or incident.permalink %}
+                            {% if not jira_url and incident_url_id %}
+                                {% set jira_url = 'https://app.incident.io/myfrontline/incidents/' ~ incident_url_id %}
+                            {% endif %}
+                            {% set duration_label = incident.client_impact_duration_label or incident.client_impact_duration_seconds %}
+                            <tr
+                                class="{{ incident.table_row_class }}"
+                                data-inc_number="{{ incident_id }}"
+                                data-product="{{ incident.product or '' }}"
+                                data-pillar="{{ incident.pillar or '' }}"
+                                data-title="{{ incident.title or '' }}"
+                                data-rca_classification="{{ incident.rca_classification or '' }}"
+                                data-reported_at="{{ incident.reported_at or incident.date or '' }}"
+                                data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
+                                data-severity="{{ incident.severity or '' }}"
+                                data-incident_lead="{{ incident.incident_lead or '' }}"
+                            >
+                                <td>{{ incident.reported_at_display or '—' }}</td>
+                                <td>
+                                    {% if incident_id %}
+                                        <a
+                                            href="https://app.incident.io/myfrontline/incidents/{{ incident_url_id or incident_id }}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="incident-link"
+                                        >
+                                            {{ incident_label }}
+                                        </a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if jira_url and incident_label %}
+                                        <a href="{{ jira_url }}" target="_blank" rel="noopener noreferrer" class="incident-link">
+                                            {{ incident_label }}
+                                        </a>
+                                    {% elif incident_label %}
                                         {{ incident_label }}
-                                    </a>
-                                {% elif incident_label %}
-                                    {{ incident_label }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                            <td>{{ incident.pillar or '—' }}</td>
-                            <td>{{ incident.product or '—' }}</td>
-                            <td>{{ incident.title or '—' }}</td>
-                            <td class="incident-duration-cell">{{ duration_label or '—' }}</td>
-                            <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
-                            <td>{{ incident.incident_lead or '—' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>{{ incident.pillar or '—' }}</td>
+                                <td>{{ incident.product or '—' }}</td>
+                                <td>{{ incident.title or '—' }}</td>
+                                <td class="incident-duration-cell">{{ duration_label or '—' }}</td>
+                                <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
+                                <td>{{ incident.incident_lead or '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
         </div>
 
         <div id="others-tab" class="tab-content {% if active_tab == 'others' %}active{% endif %}">
@@ -1267,6 +1408,7 @@
     <script id="product-pillar-map" type="application/json">{{ product_pillar_map|tojson }}</script>
     <script id="products-by-pillar" type="application/json">{{ products_by_pillar|tojson }}</script>
     <script id="sync-config-data" type="application/json">{{ sync_config|tojson }}</script>
+    <script id="weekly-roundup-data" type="application/json">{{ {"header": weekly_roundup_header, "weeks": weekly_roundup_weeks}|tojson }}</script>
 
     <footer class="site-footer" aria-label="Footer">
         <p class="footer-text">You are viewing this page from IP address: <strong>{{ client_ip }}</strong></p>

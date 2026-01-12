@@ -56,6 +56,179 @@ document.addEventListener("DOMContentLoaded", function () {
         setActiveTab(target || `${tabParam}-tab`);
     });
 
+    const weeklyDataEl = document.getElementById("weekly-roundup-data");
+    const weeklyCopyButton = document.getElementById("weekly-roundup-copy");
+    const weeklyDownloadButton = document.getElementById("weekly-roundup-download");
+    const weeklyCopyStatus = document.getElementById("weekly-roundup-copy-status");
+    const weeklyMissingToggle = document.getElementById("weekly-missing-toggle");
+
+    const weeklyData = (() => {
+        if (!weeklyDataEl) return null;
+        try {
+            return JSON.parse(weeklyDataEl.textContent || "{}");
+        } catch (err) {
+            return null;
+        }
+    })();
+
+    const escapeHtml = (value) =>
+        String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+    const buildEmailHtml = (data) => {
+        if (!data || !data.weeks) return "";
+        const header = `
+            <h2 style="margin:0 0 8px 0; font-size:18px; font-family:Arial, sans-serif;">Weekly Incident Roundup</h2>
+            <p style="margin:0 0 16px 0; font-size:12px; font-family:Arial, sans-serif;">${escapeHtml(
+                data.header || ""
+            )}</p>
+        `;
+
+        const tableHeader = `
+            <tr>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Date</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Incident</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Jira</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Product</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Impact duration</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">RCA</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Completeness</th>
+            </tr>
+        `;
+
+        const tables = data.weeks
+            .map((week) => {
+                const rows = (week.incidents || [])
+                    .map((incident) => {
+                        const incidentLink = incident.incident_url
+                            ? `<a href="${escapeHtml(incident.incident_url)}">${escapeHtml(
+                                  incident.incident_label
+                              )}</a>`
+                            : escapeHtml(incident.incident_label || "—");
+                        const jiraLink = incident.jira_url
+                            ? `<a href="${escapeHtml(incident.jira_url)}">${escapeHtml(
+                                  incident.incident_label
+                              )}</a>`
+                            : "—";
+                        const missingFields = incident.missing_fields || [];
+                        const completenessText =
+                            missingFields.length === 0
+                                ? "Complete"
+                                : `Missing: ${escapeHtml(missingFields.join(", "))}`;
+                        return `
+                            <tr>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                    incident.reported_at_display || ""
+                                )}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${incidentLink}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${jiraLink}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                    incident.product || "Missing"
+                                )}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                    incident.duration_label || ""
+                                )}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                    incident.rca_classification || ""
+                                )}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                    completenessText
+                                )}</td>
+                            </tr>
+                        `;
+                    })
+                    .join("");
+
+                const emptyRow =
+                    rows ||
+                    `<tr><td colspan="7" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
+                return `
+                    <h3 style="margin:16px 0 6px 0; font-size:14px; font-family:Arial, sans-serif;">
+                        ${escapeHtml(week.label)} (${escapeHtml(week.range_label || "")})
+                    </h3>
+                    <p style="margin:0 0 8px 0; font-size:12px; font-family:Arial, sans-serif;">
+                        Incidents: ${escapeHtml(week.incident_count)} · Total client impact: ${escapeHtml(
+                    week.total_duration_label || "0m"
+                )}
+                    </p>
+                    <table style="border-collapse:collapse; width:100%; font-size:12px; font-family:Arial, sans-serif;">
+                        <thead>${tableHeader}</thead>
+                        <tbody>${emptyRow}</tbody>
+                    </table>
+                `;
+            })
+            .join("");
+
+        return `${header}${tables}`;
+    };
+
+    const copyWeeklyHtml = async () => {
+        if (!weeklyData) return;
+        const html = buildEmailHtml(weeklyData);
+        if (!html) return;
+        if (weeklyCopyStatus) weeklyCopyStatus.textContent = "Copying…";
+
+        try {
+            if (navigator.clipboard && window.ClipboardItem) {
+                const htmlBlob = new Blob([html], { type: "text/html" });
+                const textBlob = new Blob([html.replace(/<[^>]*>/g, " ")], { type: "text/plain" });
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        "text/html": htmlBlob,
+                        "text/plain": textBlob,
+                    }),
+                ]);
+            } else if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(html);
+            }
+            if (weeklyCopyStatus) weeklyCopyStatus.textContent = "Copied HTML to clipboard.";
+        } catch (err) {
+            if (weeklyCopyStatus) weeklyCopyStatus.textContent = "Unable to copy. Use download instead.";
+        }
+    };
+
+    const downloadWeeklyHtml = () => {
+        if (!weeklyData) return;
+        const html = buildEmailHtml(weeklyData);
+        if (!html) return;
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "weekly-incident-roundup.html";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    };
+
+    if (weeklyCopyButton) {
+        weeklyCopyButton.addEventListener("click", () => {
+            copyWeeklyHtml();
+        });
+    }
+
+    if (weeklyDownloadButton) {
+        weeklyDownloadButton.addEventListener("click", downloadWeeklyHtml);
+    }
+
+    if (weeklyMissingToggle) {
+        weeklyMissingToggle.addEventListener("change", () => {
+            const url = new URL(window.location.href);
+            if (weeklyMissingToggle.checked) {
+                url.searchParams.set("missing_only", "1");
+            } else {
+                url.searchParams.delete("missing_only");
+            }
+            url.searchParams.set("weekly_roundup", "1");
+            window.location.assign(url.toString());
+        });
+    }
+
     const incidentDataEl = document.getElementById("incident-data");
     const otherDataEl = document.getElementById("other-data");
     let incidentsByDate = {};

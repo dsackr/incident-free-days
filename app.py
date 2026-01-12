@@ -1847,6 +1847,10 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     view_mode = request.args.get("view", "yearly")
     month_str = request.args.get("month")
     quarter_str = request.args.get("quarter")
+    weekly_roundup = request.args.get("weekly_roundup") == "1"
+    roundup_start_param = request.args.get("roundup_start") or ""
+    roundup_end_param = request.args.get("roundup_end") or ""
+    missing_only = request.args.get("missing_only") == "1"
     incident_duration_enabled = request.args.get("incident_duration") == "1"
     incident_multi_day_only = incident_duration_enabled and request.args.get(
         "incident_multi_day"
@@ -2189,6 +2193,30 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         incident_months = months_for_quarter(incident_months, quarter_selection)
         other_months = months_for_quarter(other_months, quarter_selection)
 
+    def compute_roundup_window():
+        app_today = datetime.now(ZoneInfo("America/New_York")).date()
+        explicit_start = parse_date(roundup_start_param) if roundup_start_param else None
+        explicit_end = parse_date(roundup_end_param) if roundup_end_param else None
+
+        if explicit_start or explicit_end:
+            start_date = explicit_start or (explicit_end - timedelta(days=6))
+            end_date = explicit_end or (start_date + timedelta(days=6))
+        else:
+            current_week_start = app_today - timedelta(days=app_today.weekday())
+            end_date = current_week_start - timedelta(days=1)
+            start_date = end_date - timedelta(days=6)
+
+        if end_date < start_date:
+            start_date, end_date = end_date, start_date
+
+        return start_date, end_date
+
+    roundup_start, roundup_end = compute_roundup_window()
+    prior_roundup_start = roundup_start - timedelta(days=7)
+    prior_roundup_end = roundup_end - timedelta(days=7)
+    roundup_start_value = roundup_start.isoformat()
+    roundup_end_value = roundup_end.isoformat()
+
     incident_filters = []
     other_filters = []
 
@@ -2262,6 +2290,12 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                     params["event_type"] = remaining_types
             elif event_type_filter:
                 params["event_type"] = event_type_filter
+        if target_tab == "table" and weekly_roundup:
+            params["weekly_roundup"] = "1"
+            params["roundup_start"] = roundup_start_value
+            params["roundup_end"] = roundup_end_value
+            if missing_only:
+                params["missing_only"] = "1"
 
         return url_for("index", **params)
 
@@ -2435,6 +2469,164 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     for incident in incidents_filtered:
         annotate_incident_for_table(incident)
 
+    def is_missing_rca_value(value):
+        normalized = (value or "").strip().casefold()
+        return not normalized or normalized in MISSING_RCA_VALUES or normalized.startswith(
+            "not classified"
+        )
+
+    def format_range_label(start, end):
+        if not start or not end:
+            return ""
+        if start.year == end.year:
+            if start.month == end.month:
+                return f"{start.strftime('%b')} {start.day}–{end.day}, {start.year}"
+            return (
+                f"{start.strftime('%b')} {start.day}–"
+                f"{end.strftime('%b')} {end.day}, {start.year}"
+            )
+        return (
+            f"{start.strftime('%b')} {start.day}, {start.year}–"
+            f"{end.strftime('%b')} {end.day}, {end.year}"
+        )
+
+    def incident_matches_filters(event):
+        if product_filter_set and event.get("product") not in product_filter_set:
+            return False
+        if pillar_filter_set and not product_filter_set and event.get("pillar") not in pillar_filter_set:
+            return False
+        if rca_classification_filter_set and event.get("rca_classification") not in rca_classification_filter_set:
+            return False
+        if severity_filter_set and event.get("severity") not in severity_filter_set:
+            return False
+        return True
+
+    def build_roundup_row(incident):
+        reported_date = parse_date(incident.get("reported_at") or incident.get("date"))
+        reported_display = (
+            reported_date.strftime("%m/%d/%Y") if reported_date else incident.get("date") or ""
+        )
+        incident_id = incident.get("inc_number") or incident.get("id") or ""
+        incident_label = incident_id or "—"
+        incident_url_id = incident_id.replace("INC-", "") if incident_id else ""
+        incident_url = (
+            f"https://app.incident.io/myfrontline/incidents/{incident_url_id or incident_id}"
+            if incident_id
+            else ""
+        )
+        external_ref = incident.get("external_issue_reference") or {}
+        jira_url = (
+            external_ref.get("issue_permalink")
+            if external_ref.get("provider") == "jira"
+            else None
+        )
+        if not jira_url:
+            jira_url = incident.get("permalink") or incident_url
+
+        missing_fields = []
+        product = (incident.get("product") or "").strip()
+        if not product:
+            missing_fields.append("Product")
+        duration_seconds = get_client_impact_duration_seconds(incident)
+        if not duration_seconds:
+            missing_fields.append("Impact duration")
+        rca_classification = (incident.get("rca_classification") or "").strip()
+        if is_missing_rca_value(rca_classification):
+            missing_fields.append("RCA classification")
+
+        completeness_label = "Complete" if not missing_fields else "Missing data"
+        completeness_class = "complete" if not missing_fields else "missing"
+
+        return {
+            "reported_at_display": reported_display or "—",
+            "reported_at_sort": reported_date.isoformat() if reported_date else "",
+            "incident_id": incident_id,
+            "incident_label": incident_label,
+            "incident_url": incident_url,
+            "jira_url": jira_url,
+            "pillar": incident.get("pillar") or "",
+            "product": product,
+            "title": incident.get("title") or "",
+            "duration_seconds": duration_seconds,
+            "duration_label": format_duration_short(duration_seconds)
+            if duration_seconds
+            else "Missing",
+            "rca_classification": rca_classification or "Missing",
+            "incident_lead": incident.get("incident_lead") or "",
+            "missing_fields": missing_fields,
+            "missing_product": not product,
+            "missing_duration": not duration_seconds,
+            "missing_rca": is_missing_rca_value(rca_classification),
+            "completeness_label": completeness_label,
+            "completeness_class": completeness_class,
+        }
+
+    def build_roundup_week(label, start_date, end_date):
+        rows = []
+        total_duration = 0
+        for incident in incidents:
+            if not incident_matches_filters(incident):
+                continue
+            reported_date = parse_date(incident.get("reported_at") or incident.get("date"))
+            if not reported_date or not (start_date <= reported_date <= end_date):
+                continue
+
+            row = build_roundup_row(incident)
+            if missing_only and not row["missing_fields"]:
+                continue
+            rows.append(row)
+            total_duration += row["duration_seconds"] or 0
+
+        rows.sort(key=lambda item: item["reported_at_sort"], reverse=True)
+        return {
+            "label": label,
+            "range_label": format_range_label(start_date, end_date),
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "incident_count": len(rows),
+            "total_duration_label": format_duration_short(total_duration),
+            "total_duration_seconds": total_duration,
+            "incidents": rows,
+        }
+
+    weekly_roundup_weeks = [
+        build_roundup_week("Prior week (Mon–Sun)", roundup_start, roundup_end),
+        build_roundup_week("Week before (Mon–Sun)", prior_roundup_start, prior_roundup_end),
+    ]
+    weekly_roundup_header = (
+        f"Weeks of {format_range_label(roundup_start, roundup_end)} and "
+        f"{format_range_label(prior_roundup_start, prior_roundup_end)}"
+    )
+
+    def build_table_view_link(weekly=False):
+        params = {"view": view_mode, "year": year, "tab": "table"}
+        if month_selection:
+            params["month"] = month_selection
+        if quarter_selection:
+            params["quarter"] = quarter_selection
+        if pillar_filter:
+            params["pillar"] = pillar_filter
+        if product_filter:
+            params["product"] = product_filter
+        if rca_classification_filter:
+            params["rca_classification"] = rca_classification_filter
+        elif rca_classification_param_supplied:
+            params["rca_classification"] = [""]
+        if severity_filter:
+            params["severity"] = severity_filter
+        elif severity_param_supplied:
+            params["severity"] = [""]
+        if weekly:
+            params["weekly_roundup"] = "1"
+            params["roundup_start"] = roundup_start_value
+            params["roundup_end"] = roundup_end_value
+            if missing_only:
+                params["missing_only"] = "1"
+        return url_for("index", **params)
+
+    table_view_link = build_table_view_link(weekly=False)
+    weekly_roundup_link = build_table_view_link(weekly=True)
+
     # sort newest-first for display
     incidents_sorted = sorted(
         incidents_filtered,
@@ -2503,6 +2695,14 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_image_exists=osha_image_exists,
         osha_background_exists=osha_background_exists,
         osha_status=osha_status,
+        weekly_roundup=weekly_roundup,
+        weekly_roundup_weeks=weekly_roundup_weeks,
+        weekly_roundup_header=weekly_roundup_header,
+        roundup_start_value=roundup_start_value,
+        roundup_end_value=roundup_end_value,
+        missing_only=missing_only,
+        table_view_link=table_view_link,
+        weekly_roundup_link=weekly_roundup_link,
     )
 
 
