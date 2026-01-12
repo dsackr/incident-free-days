@@ -1151,6 +1151,100 @@ h1 {
     gap: 8px;
 }
 
+.weekly-roundup-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.weekly-roundup-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.weekly-roundup-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.weekly-roundup-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.weekly-roundup-form label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    gap: 4px;
+}
+
+.weekly-roundup-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weekly-roundup-status {
+    margin: 4px 0 12px;
+}
+
+.weekly-roundup-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.weekly-roundup-card {
+    margin-top: 12px;
+}
+
+.stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.quality-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.quality-badge.complete {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.quality-badge.missing {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.missing-field {
+    background: #fee2e2;
+    color: #7f1d1d;
+    font-weight: 600;
+}
+
 .table-control-panel {
     margin: 12px 0;
 }
