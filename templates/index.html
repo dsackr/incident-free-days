@@ -639,6 +639,7 @@
                                     <th>Date</th>
                                     <th>Incident</th>
                                     <th>Jira</th>
+                                    <th>Severity</th>
                                     <th>Product</th>
                                     <th>Client impact duration</th>
                                     <th>RCA Classification</th>
@@ -668,6 +669,7 @@
                                                 —
                                             {% endif %}
                                         </td>
+                                        <td class="{% if incident.missing_severity %}missing-field{% endif %}">{{ incident.severity or 'Missing' }}</td>
                                         <td class="{% if incident.missing_product %}missing-field{% endif %}">{{ incident.product or 'Missing' }}</td>
                                         <td class="{% if incident.missing_duration %}missing-field{% endif %}">{{ incident.duration_label }}</td>
                                         <td class="{% if incident.missing_rca %}missing-field{% endif %}">{{ incident.rca_classification }}</td>
@@ -685,7 +687,7 @@
                                     {% endfor %}
                                 {% else %}
                                     <tr>
-                                        <td colspan="7">No incidents in this window.</td>
+                                        <td colspan="8">No incidents in this window.</td>
                                     </tr>
                                 {% endif %}
                             </tbody>
@@ -724,6 +726,7 @@
                                 <option value="reported_at" selected>Date</option>
                                 <option value="inc_number">Incident</option>
                                 <option value="pillar">Pillar</option>
+                                <option value="severity">Severity</option>
                                 <option value="product">Product</option>
                                 <option value="title">Title</option>
                                 <option value="duration_seconds">Client impact duration</option>
@@ -746,6 +749,7 @@
                                 <option value="all" selected>All columns</option>
                                 <option value="inc_number">Incident</option>
                                 <option value="pillar">Pillar</option>
+                                <option value="severity">Severity</option>
                                 <option value="product">Product</option>
                                 <option value="title">Title</option>
                                 <option value="rca_classification">RCA Classification</option>
@@ -773,6 +777,7 @@
                                 <th data-sort-key="inc_number" aria-sort="none">Incident</th>
                                 <th>Jira Link</th>
                                 <th data-sort-key="pillar" aria-sort="none">Pillar</th>
+                                <th data-sort-key="severity" aria-sort="none">Severity</th>
                                 <th data-sort-key="product" aria-sort="none">Product</th>
                                 <th data-sort-key="title" aria-sort="none">Title</th>
                                 <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
@@ -831,6 +836,7 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ incident.pillar or '—' }}</td>
+                                <td>{{ incident.severity or '—' }}</td>
                                 <td>{{ incident.product or '—' }}</td>
                                 <td>{{ incident.title or '—' }}</td>
                                 <td class="incident-duration-cell">{{ duration_label or '—' }}</td>
