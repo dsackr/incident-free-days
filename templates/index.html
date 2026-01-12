@@ -666,6 +666,7 @@
                             data-rca_classification="{{ incident.rca_classification or '' }}"
                             data-reported_at="{{ incident.reported_at or incident.date or '' }}"
                             data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
+                            data-severity="{{ incident.severity or '' }}"
                             data-incident_lead="{{ incident.incident_lead or '' }}"
                         >
                             <td>{{ incident.reported_at_display or '—' }}</td>
@@ -697,7 +698,7 @@
                             <td>{{ incident.pillar or '—' }}</td>
                             <td>{{ incident.product or '—' }}</td>
                             <td>{{ incident.title or '—' }}</td>
-                            <td>{{ duration_label or '—' }}</td>
+                            <td class="incident-duration-cell">{{ duration_label or '—' }}</td>
                             <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
                             <td>{{ incident.incident_lead or '—' }}</td>
                         </tr>

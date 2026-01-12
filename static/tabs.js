@@ -549,6 +549,51 @@ document.addEventListener("DOMContentLoaded", function () {
         const filterTextInput = document.getElementById("incident-table-filter-text");
 
         const allRows = Array.from(tableBody.querySelectorAll("tr"));
+        const durationHighlightThreshold = 60 * 60;
+        const durationCellSelector = ".incident-duration-cell";
+
+        const parseSeverityValue = (value) => {
+            if (!value) return null;
+            const match = value.toString().match(/(\d+)/);
+            if (!match) return null;
+            const parsed = Number.parseInt(match[1], 10);
+            return Number.isNaN(parsed) ? null : parsed;
+        };
+
+        const updateDurationHighlight = (row) => {
+            const durationCell = row.querySelector(durationCellSelector);
+            if (!durationCell) return;
+
+            durationCell.classList.remove(
+                "duration-alert-yellow",
+                "duration-alert-red"
+            );
+
+            const durationSeconds = Number.parseInt(
+                row.dataset.duration_seconds || "",
+                10
+            );
+            const normalizedDuration = Number.isNaN(durationSeconds)
+                ? 0
+                : durationSeconds;
+            const severityValue = parseSeverityValue(row.dataset.severity || "");
+
+            if (normalizedDuration > durationHighlightThreshold) {
+                durationCell.classList.add("duration-alert-red");
+                return;
+            }
+
+            if (!severityValue) return;
+
+            if (normalizedDuration <= 0 && severityValue <= 3) {
+                durationCell.classList.add("duration-alert-yellow");
+                return;
+            }
+
+            if (normalizedDuration > 0 && severityValue === 6) {
+                durationCell.classList.add("duration-alert-yellow");
+            }
+        };
 
         const columnTypes = {
             reported_at: "date",
@@ -649,6 +694,7 @@ document.addEventListener("DOMContentLoaded", function () {
         filterColumnSelect?.addEventListener("change", applySortAndFilter);
         filterTextInput?.addEventListener("input", applySortAndFilter);
 
+        allRows.forEach((row) => updateDurationHighlight(row));
         applySortAndFilter();
     }
 
