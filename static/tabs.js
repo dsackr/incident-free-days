@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     week.total_duration_label || "0m"
                 )}
                     </p>
-                    <table style="border-collapse:collapse; width:100%; table-layout:fixed; font-size:12px; font-family:Arial, sans-serif;">
+                    <table style="border-collapse:collapse; width:100%; max-width:720px; margin:0 auto; table-layout:fixed; font-size:12px; font-family:Arial, sans-serif;">
                         <thead>${tableHeader}</thead>
                         <tbody>${emptyRow}</tbody>
                     </table>
