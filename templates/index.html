@@ -647,7 +647,7 @@
                                     <th>Product</th>
                                     <th>Client impact duration</th>
                                     <th>RCA Classification</th>
-                                    <th>Completeness</th>
+                                    <th>Incident lead</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -678,15 +678,8 @@
                                         <td class="{% if incident.missing_product %}missing-field{% endif %}">{{ incident.product or 'Missing' }}</td>
                                         <td class="{% if incident.missing_duration %}missing-field{% endif %}">{{ incident.duration_label }}</td>
                                         <td class="{% if incident.missing_rca %}missing-field{% endif %}">{{ incident.rca_classification }}</td>
-                                        <td>
-                                            <span
-                                                class="quality-badge {{ incident.completeness_class }}"
-                                                {% if incident.missing_fields %}
-                                                title="Missing: {{ incident.missing_fields | join(', ') }}"
-                                                {% endif %}
-                                            >
-                                                {{ incident.completeness_label }}
-                                            </span>
+                                        <td class="{% if incident.missing_incident_lead %}missing-field{% endif %}">
+                                            {{ incident.incident_lead or 'Missing' }}
                                         </td>
                                     </tr>
                                     {% endfor %}

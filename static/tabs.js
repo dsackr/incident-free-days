@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Product</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Impact duration</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">RCA</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Completeness</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Incident lead</th>
             </tr>
         `;
 
@@ -120,8 +120,6 @@ document.addEventListener("DOMContentLoaded", function () {
                                   incident.incident_label
                               )}</a>`
                             : "—";
-                        const missingFields = incident.missing_fields || [];
-                        const completenessText = missingFields.length === 0 ? "Complete" : "Incomplete";
                         return `
                             <tr>
                                 <td style="${baseCellStyle}">${escapeHtml(
@@ -144,9 +142,9 @@ document.addEventListener("DOMContentLoaded", function () {
                                 <td style="${incident.missing_rca ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.rca_classification || ""
                                 )}</td>
-                                <td style="${missingFields.length ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    completenessText
-                                )}</td>
+                                <td style="${
+                                    incident.missing_incident_lead ? missingCellStyle : baseCellStyle
+                                }">${escapeHtml(incident.incident_lead || "Missing")}</td>
                             </tr>
                         `;
                     })

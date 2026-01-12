@@ -2532,9 +2532,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         rca_classification = (incident.get("rca_classification") or "").strip()
         if is_missing_rca_value(rca_classification):
             missing_fields.append("RCA classification")
-
-        completeness_label = "Complete" if not missing_fields else "Missing data"
-        completeness_class = "complete" if not missing_fields else "missing"
+        incident_lead = (incident.get("incident_lead") or "").strip()
+        if not incident_lead:
+            missing_fields.append("Incident lead")
 
         return {
             "reported_at_display": reported_display or "—",
@@ -2552,15 +2552,14 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             if duration_seconds
             else "Missing",
             "rca_classification": rca_classification or "Missing",
-            "incident_lead": incident.get("incident_lead") or "",
+            "incident_lead": incident_lead,
             "missing_fields": missing_fields,
             "missing_severity": not severity,
             "missing_pillar": not pillar,
             "missing_product": not product,
             "missing_duration": not duration_seconds,
             "missing_rca": is_missing_rca_value(rca_classification),
-            "completeness_label": completeness_label,
-            "completeness_class": completeness_class,
+            "missing_incident_lead": not incident_lead,
         }
 
     def build_roundup_week(label, start_date, end_date):
