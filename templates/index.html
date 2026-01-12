@@ -586,15 +586,14 @@
                     <label>
                         Sort by
                         <select id="incident-table-sort" aria-label="Sort incidents by column">
-                            <option value="reported_at" selected>Reported at</option>
+                            <option value="reported_at" selected>Date</option>
                             <option value="inc_number">Incident</option>
-                            <option value="product">Product</option>
                             <option value="pillar">Pillar</option>
-                            <option value="severity">Severity</option>
-                            <option value="rca_classification">RCA Classification</option>
-                            <option value="closed_at">Closed at</option>
+                            <option value="product">Product</option>
+                            <option value="title">Title</option>
                             <option value="duration_seconds">Client impact duration</option>
-                            <option value="event_type">Type</option>
+                            <option value="rca_classification">RCA Classification</option>
+                            <option value="incident_lead">Incident Lead</option>
                         </select>
                     </label>
 
@@ -611,11 +610,11 @@
                         <select id="incident-table-filter-column" aria-label="Filter incidents by column">
                             <option value="all" selected>All columns</option>
                             <option value="inc_number">Incident</option>
-                            <option value="product">Product</option>
                             <option value="pillar">Pillar</option>
-                            <option value="severity">Severity</option>
+                            <option value="product">Product</option>
+                            <option value="title">Title</option>
                             <option value="rca_classification">RCA Classification</option>
-                            <option value="event_type">Type</option>
+                            <option value="incident_lead">Incident Lead</option>
                         </select>
                     </label>
 
@@ -635,16 +634,15 @@
                 <table class="incidents-table" id="incident-table">
                     <thead>
                         <tr>
+                            <th data-sort-key="reported_at" aria-sort="descending">Date</th>
                             <th data-sort-key="inc_number" aria-sort="none">Incident</th>
                             <th>Jira Link</th>
-                            <th data-sort-key="product" aria-sort="none">Product</th>
                             <th data-sort-key="pillar" aria-sort="none">Pillar</th>
-                            <th data-sort-key="severity" aria-sort="none">Severity</th>
-                            <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
-                            <th data-sort-key="reported_at" aria-sort="descending">Reported at</th>
-                            <th data-sort-key="closed_at" aria-sort="none">Closed at</th>
+                            <th data-sort-key="product" aria-sort="none">Product</th>
+                            <th data-sort-key="title" aria-sort="none">Title</th>
                             <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
-                            <th data-sort-key="event_type" aria-sort="none">Type</th>
+                            <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
+                            <th data-sort-key="incident_lead" aria-sort="none">Incident Lead</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -664,13 +662,13 @@
                             data-inc_number="{{ incident_id }}"
                             data-product="{{ incident.product or '' }}"
                             data-pillar="{{ incident.pillar or '' }}"
-                            data-severity="{{ incident.severity or '' }}"
+                            data-title="{{ incident.title or '' }}"
                             data-rca_classification="{{ incident.rca_classification or '' }}"
                             data-reported_at="{{ incident.reported_at or incident.date or '' }}"
-                            data-closed_at="{{ incident.closed_at or '' }}"
                             data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
-                            data-event_type="{{ incident.event_type or '' }}"
+                            data-incident_lead="{{ incident.incident_lead or '' }}"
                         >
+                            <td>{{ incident.reported_at_display or '—' }}</td>
                             <td>
                                 {% if incident_id %}
                                     <a
@@ -696,14 +694,12 @@
                                     —
                                 {% endif %}
                             </td>
-                            <td>{{ incident.product or '—' }}</td>
                             <td>{{ incident.pillar or '—' }}</td>
-                            <td>{{ incident.severity or '—' }}</td>
-                            <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
-                            <td>{{ incident.reported_at or incident.date or '—' }}</td>
-                            <td>{{ incident.closed_at or '—' }}</td>
+                            <td>{{ incident.product or '—' }}</td>
+                            <td>{{ incident.title or '—' }}</td>
                             <td>{{ duration_label or '—' }}</td>
-                            <td>{{ incident.event_type or 'Operational Incident' }}</td>
+                            <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
+                            <td>{{ incident.incident_lead or '—' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -1458,6 +1458,61 @@ def _extract_client_impact_duration_seconds(api_incident):
     return 0
 
 
+def _extract_incident_lead(api_incident):
+    def extract_name(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        if isinstance(value, dict):
+            for key in (
+                "name",
+                "full_name",
+                "display_name",
+                "email",
+                "id",
+            ):
+                candidate = value.get(key)
+                if candidate:
+                    return str(candidate).strip()
+
+            for nested_key in ("user", "assignee", "owner"):
+                candidate = extract_name(value.get(nested_key))
+                if candidate:
+                    return candidate
+            return None
+        if isinstance(value, list):
+            for item in value:
+                candidate = extract_name(item)
+                if candidate:
+                    return candidate
+        return None
+
+    for key in (
+        "incident_lead",
+        "incident_lead_user",
+        "lead",
+        "lead_user",
+        "lead_assignee",
+        "incident_manager",
+    ):
+        candidate = extract_name(api_incident.get(key))
+        if candidate:
+            return candidate
+
+    for entry in api_incident.get("incident_role_assignments") or []:
+        role = entry.get("role") or {}
+        role_name = (role.get("name") or "").strip().casefold()
+        if role_name not in {"incident lead", "lead"}:
+            continue
+        candidate = extract_name(entry.get("assignee") or entry.get("user"))
+        if candidate:
+            return candidate
+
+    return ""
+
+
 def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     mapping = mapping if mapping is not None else load_product_key()
     field_mapping = normalize_field_mapping(field_mapping)
@@ -1506,6 +1561,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     external_issue_reference = api_incident.get("external_issue_reference") or {}
 
     client_impact_seconds = _extract_client_impact_duration_seconds(api_incident)
+    incident_lead = _extract_incident_lead(api_incident)
 
     payloads = []
     for product in products:
@@ -1528,6 +1584,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "title": title,
                 "rca_classification": rca_classification,
                 "client_impact_duration_seconds": client_impact_seconds,
+                "incident_lead": incident_lead,
                 "permalink": permalink,
                 "external_issue_reference": external_issue_reference,
             }
@@ -2359,6 +2416,11 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             and "non procedural" not in normalized
         )
         incident["table_row_class"] = "incident-row-procedural" if is_procedural else ""
+        reported_source = incident.get("reported_at") or incident.get("date") or ""
+        reported_date = parse_date(reported_source) if reported_source else None
+        incident["reported_at_display"] = (
+            reported_date.strftime("%m/%d/%Y") if reported_date else reported_source
+        )
 
         if is_missing_rca:
             incident_date = parse_date(incident.get("reported_at") or incident.get("date"))

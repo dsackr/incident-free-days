@@ -518,7 +518,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const columnTypes = {
             reported_at: "date",
-            closed_at: "date",
             duration_seconds: "number",
         };
 
@@ -526,9 +525,9 @@ document.addEventListener("DOMContentLoaded", function () {
             "inc_number",
             "product",
             "pillar",
-            "severity",
+            "title",
             "rca_classification",
-            "event_type",
+            "incident_lead",
         ];
 
         const normalizeValue = (key, value) => {
