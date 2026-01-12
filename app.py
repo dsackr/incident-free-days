@@ -2517,6 +2517,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             jira_url = incident.get("permalink") or incident_url
 
         missing_fields = []
+        severity = (incident.get("severity") or "").strip()
+        if not severity:
+            missing_fields.append("Severity")
         product = (incident.get("product") or "").strip()
         if not product:
             missing_fields.append("Product")
@@ -2538,6 +2541,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             "incident_url": incident_url,
             "jira_url": jira_url,
             "pillar": incident.get("pillar") or "",
+            "severity": severity,
             "product": product,
             "title": incident.get("title") or "",
             "duration_seconds": duration_seconds,
@@ -2547,6 +2551,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             "rca_classification": rca_classification or "Missing",
             "incident_lead": incident.get("incident_lead") or "",
             "missing_fields": missing_fields,
+            "missing_severity": not severity,
             "missing_product": not product,
             "missing_duration": not duration_seconds,
             "missing_rca": is_missing_rca_value(rca_classification),
