@@ -100,6 +100,10 @@ document.addEventListener("DOMContentLoaded", function () {
             </tr>
         `;
 
+        const baseCellStyle =
+            "padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;";
+        const missingCellStyle = `${baseCellStyle} background:#fee2e2; color:#7f1d1d; font-weight:600;`;
+
         const tables = data.weeks
             .map((week) => {
                 const rows = (week.incidents || [])
@@ -115,27 +119,24 @@ document.addEventListener("DOMContentLoaded", function () {
                               )}</a>`
                             : "—";
                         const missingFields = incident.missing_fields || [];
-                        const completenessText =
-                            missingFields.length === 0
-                                ? "Complete"
-                                : `Missing: ${escapeHtml(missingFields.join(", "))}`;
+                        const completenessText = missingFields.length === 0 ? "Complete" : "Incomplete";
                         return `
                             <tr>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
+                                <td style="${baseCellStyle}">${escapeHtml(
                                     incident.reported_at_display || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${incidentLink}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${jiraLink}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
+                                <td style="${baseCellStyle}">${incidentLink}</td>
+                                <td style="${baseCellStyle}">${jiraLink}</td>
+                                <td style="${incident.missing_product ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.product || "Missing"
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
+                                <td style="${incident.missing_duration ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.duration_label || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
+                                <td style="${incident.missing_rca ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.rca_classification || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
+                                <td style="${missingFields.length ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     completenessText
                                 )}</td>
                             </tr>
