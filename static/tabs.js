@@ -166,16 +166,23 @@ document.addEventListener("DOMContentLoaded", function () {
         return `${header}${tables}`;
     };
 
-    const copyFallbackText = (value) => {
-        const textarea = document.createElement("textarea");
-        textarea.value = value;
-        textarea.setAttribute("readonly", "true");
-        textarea.style.position = "absolute";
-        textarea.style.left = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.select();
+    const copyFallbackHtml = (value) => {
+        const container = document.createElement("div");
+        container.setAttribute("contenteditable", "true");
+        container.style.position = "absolute";
+        container.style.left = "-9999px";
+        container.innerHTML = value;
+        document.body.appendChild(container);
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(container);
+        selection.removeAllRanges();
+        selection.addRange(range);
         const success = document.execCommand("copy");
-        document.body.removeChild(textarea);
+
+        selection.removeAllRanges();
+        document.body.removeChild(container);
         return success;
     };
 
@@ -195,10 +202,8 @@ document.addEventListener("DOMContentLoaded", function () {
                         "text/plain": textBlob,
                     }),
                 ]);
-            } else if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(html);
             } else {
-                const success = copyFallbackText(html);
+                const success = copyFallbackHtml(html);
                 if (!success) {
                     throw new Error("Clipboard unavailable");
                 }
