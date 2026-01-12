@@ -1201,6 +1201,15 @@ h1 {
     background: #fdba74;
 }
 
+.incidents-table td.duration-alert-yellow {
+    background: #fff3a1;
+}
+
+.incidents-table td.duration-alert-red {
+    background: #f28b82;
+    color: #1f1f1f;
+}
+
 .table-wrapper {
     overflow-x: auto;
 }
