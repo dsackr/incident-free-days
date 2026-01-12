@@ -94,7 +94,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Incident</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:12%; word-break:break-word; white-space:normal;">Jira</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Severity</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:18%; word-break:break-word; white-space:normal;">Product</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Pillar</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Product</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Impact duration</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">RCA</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Completeness</th>
@@ -131,6 +132,9 @@ document.addEventListener("DOMContentLoaded", function () {
                                 <td style="${incident.missing_severity ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.severity || "Missing"
                                 )}</td>
+                                <td style="${incident.missing_pillar ? missingCellStyle : baseCellStyle}">${escapeHtml(
+                                    incident.pillar || "Missing"
+                                )}</td>
                                 <td style="${incident.missing_product ? missingCellStyle : baseCellStyle}">${escapeHtml(
                                     incident.product || "Missing"
                                 )}</td>
@@ -150,7 +154,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 const emptyRow =
                     rows ||
-                    `<tr><td colspan="8" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
+                    `<tr><td colspan="9" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
                 return `
                     <h3 style="margin:16px 0 6px 0; font-size:14px; font-family:Arial, sans-serif;">
                         ${escapeHtml(week.label)} (${escapeHtml(week.range_label || "")})
