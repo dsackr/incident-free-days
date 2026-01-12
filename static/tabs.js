@@ -10,16 +10,50 @@ document.addEventListener("DOMContentLoaded", function () {
     const buttons = document.querySelectorAll(".tab-button");
     const contents = document.querySelectorAll(".tab-content");
 
+    const tabParamByTarget = {
+        "incidents-tab": "incidents",
+        "incidents-table-tab": "table",
+        "others-tab": "others",
+        "osha-tab": "osha",
+        "form-tab": "form",
+    };
+
+    const updateTabUrl = (target) => {
+        const tabParam = tabParamByTarget[target] || target?.replace(/-tab$/, "");
+        if (!tabParam) return;
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", tabParam);
+        window.history.pushState({ tab: tabParam }, "", url.toString());
+    };
+
+    const setActiveTab = (target) => {
+        const targetEl = document.getElementById(target);
+        if (!targetEl) return;
+
+        buttons.forEach((b) => b.classList.remove("active"));
+        contents.forEach((c) => c.classList.remove("active"));
+
+        const matchingButton = Array.from(buttons).find((btn) => btn.getAttribute("data-tab") === target);
+        matchingButton?.classList.add("active");
+        targetEl.classList.add("active");
+    };
+
     buttons.forEach((btn) => {
         btn.addEventListener("click", () => {
             const target = btn.getAttribute("data-tab");
-
-            buttons.forEach((b) => b.classList.remove("active"));
-            contents.forEach((c) => c.classList.remove("active"));
-
-            btn.classList.add("active");
-            document.getElementById(target).classList.add("active");
+            setActiveTab(target);
+            updateTabUrl(target);
         });
+    });
+
+    window.addEventListener("popstate", () => {
+        const url = new URL(window.location.href);
+        const tabParam = url.searchParams.get("tab");
+        if (!tabParam) return;
+
+        const target = Object.keys(tabParamByTarget).find((key) => tabParamByTarget[key] === tabParam);
+        setActiveTab(target || `${tabParam}-tab`);
     });
 
     const incidentDataEl = document.getElementById("incident-data");
