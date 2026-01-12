@@ -2624,6 +2624,30 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     table_view_link = build_table_view_link(weekly=False)
     weekly_roundup_link = build_table_view_link(weekly=True)
 
+    def build_table_export_link():
+        params = {"view": view_mode, "year": year}
+        if month_selection:
+            params["month"] = month_selection
+        if quarter_selection:
+            params["quarter"] = quarter_selection
+        if pillar_filter:
+            params["pillar"] = pillar_filter
+        if product_filter:
+            params["product"] = product_filter
+        if rca_classification_filter:
+            params["rca_classification"] = rca_classification_filter
+        elif rca_classification_param_supplied:
+            params["rca_classification"] = [""]
+        if severity_filter:
+            params["severity"] = severity_filter
+        elif severity_param_supplied:
+            params["severity"] = [""]
+        if incident_duration_enabled:
+            params["incident_duration"] = "1"
+        if incident_multi_day_only:
+            params["incident_multi_day"] = "1"
+        return url_for("export_incident_table", **params)
+
     # sort newest-first for display
     incidents_sorted = sorted(
         incidents_filtered,
@@ -2698,8 +2722,198 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         roundup_start_value=roundup_start_value,
         missing_only=missing_only,
         table_view_link=table_view_link,
+        table_export_link=build_table_export_link(),
         weekly_roundup_link=weekly_roundup_link,
     )
+
+
+def filter_incidents_for_table_export(
+    incidents,
+    *,
+    year,
+    view_mode,
+    month_selection,
+    quarter_selection,
+    pillar_filter,
+    product_filter,
+    rca_classification_filter,
+    severity_filter,
+    incident_duration_enabled,
+    incident_multi_day_only,
+):
+    filtered = []
+    product_filter_set = set(product_filter)
+    pillar_filter_set = set(pillar_filter)
+    rca_filter_set = set(rca_classification_filter)
+    severity_filter_set = set(severity_filter)
+
+    quarter_months = None
+    if view_mode == "quarterly" and quarter_selection:
+        start_month = (quarter_selection - 1) * 3 + 1
+        quarter_months = {start_month, start_month + 1, start_month + 2}
+
+    for incident in incidents:
+        if product_filter_set and incident.get("product") not in product_filter_set:
+            continue
+        if (
+            pillar_filter_set
+            and not product_filter_set
+            and incident.get("pillar") not in pillar_filter_set
+        ):
+            continue
+        if rca_filter_set and incident.get("rca_classification") not in rca_filter_set:
+            continue
+        if severity_filter_set and incident.get("severity") not in severity_filter_set:
+            continue
+
+        covered_dates = compute_event_dates(incident, incident_duration_enabled)
+        if not covered_dates:
+            continue
+
+        if incident_multi_day_only and len(set(covered_dates)) < 2:
+            continue
+
+        if view_mode == "monthly" and month_selection:
+            covered_dates = [
+                d for d in covered_dates if d.year == year and d.month == month_selection
+            ]
+        elif view_mode == "quarterly" and quarter_months:
+            covered_dates = [
+                d for d in covered_dates if d.year == year and d.month in quarter_months
+            ]
+        else:
+            covered_dates = [d for d in covered_dates if d.year == year]
+
+        if not covered_dates:
+            continue
+
+        filtered.append(incident)
+
+    return sorted(
+        filtered,
+        key=lambda incident: (incident.get("reported_at") or incident.get("date") or ""),
+        reverse=True,
+    )
+
+
+@app.route("/incidents/export", methods=["GET"])
+def export_incident_table():
+    year_str = request.args.get("year")
+    view_mode = request.args.get("view", "yearly")
+    month_str = request.args.get("month")
+    quarter_str = request.args.get("quarter")
+    incident_duration_enabled = request.args.get("incident_duration") == "1"
+    incident_multi_day_only = incident_duration_enabled and request.args.get(
+        "incident_multi_day"
+    ) == "1"
+
+    pillar_filter = [value for value in request.args.getlist("pillar") if value]
+    product_filter = [value for value in request.args.getlist("product") if value]
+    rca_classification_filter = [
+        value for value in request.args.getlist("rca_classification") if value
+    ]
+    severity_filter = [value for value in request.args.getlist("severity") if value]
+
+    try:
+        year = int(year_str) if year_str else date.today().year
+    except ValueError:
+        year = date.today().year
+
+    try:
+        month_selection = int(month_str) if month_str else None
+    except ValueError:
+        month_selection = None
+
+    try:
+        quarter_selection = int(quarter_str) if quarter_str else None
+    except ValueError:
+        quarter_selection = None
+
+    if view_mode not in {"yearly", "monthly", "quarterly"}:
+        view_mode = "yearly"
+
+    current_month = date.today().month
+    if view_mode == "monthly":
+        month_selection = month_selection or current_month
+        quarter_selection = (month_selection - 1) // 3 + 1
+    elif view_mode == "quarterly":
+        if quarter_selection not in {1, 2, 3, 4}:
+            source_month = month_selection or current_month
+            quarter_selection = (source_month - 1) // 3 + 1
+        month_selection = None
+    else:
+        month_selection = None
+
+    if view_mode == "monthly":
+        if month_selection is None:
+            today = date.today()
+            month_selection = today.month if today.year == year else 1
+        if not (1 <= month_selection <= 12):
+            month_selection = None
+
+    incidents = [
+        event
+        for event in load_events(DATA_FILE)
+        if (event.get("event_type") or "Operational Incident") == "Operational Incident"
+    ]
+
+    incidents_sorted = filter_incidents_for_table_export(
+        incidents,
+        year=year,
+        view_mode=view_mode,
+        month_selection=month_selection,
+        quarter_selection=quarter_selection,
+        pillar_filter=pillar_filter,
+        product_filter=product_filter,
+        rca_classification_filter=rca_classification_filter,
+        severity_filter=severity_filter,
+        incident_duration_enabled=incident_duration_enabled,
+        incident_multi_day_only=incident_multi_day_only,
+    )
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Reported At",
+            "Incident",
+            "Pillar",
+            "Severity",
+            "Product",
+            "Title",
+            "Impact Duration",
+            "RCA Classification",
+            "Incident Lead",
+        ]
+    )
+    for incident in incidents_sorted:
+        reported_date = parse_date(incident.get("reported_at") or incident.get("date"))
+        reported_display = (
+            reported_date.strftime("%m/%d/%Y") if reported_date else incident.get("date") or ""
+        )
+        incident_id = incident.get("inc_number") or incident.get("id") or ""
+        duration_seconds = get_client_impact_duration_seconds(incident)
+        duration_label = format_duration_short(duration_seconds) if duration_seconds else ""
+
+        writer.writerow(
+            [
+                reported_display or "—",
+                incident_id or "—",
+                incident.get("pillar") or "—",
+                incident.get("severity") or "—",
+                incident.get("product") or "—",
+                incident.get("title") or "—",
+                duration_label or "—",
+                incident.get("rca_classification") or "—",
+                incident.get("incident_lead") or "—",
+            ]
+        )
+
+    csv_data = output.getvalue()
+    filename = f"incident-table-{date.today().isoformat()}.csv"
+    response = Response(csv_data, mimetype="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return response
 
 
 @app.route("/graphs", methods=["GET"])

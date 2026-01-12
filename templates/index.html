@@ -379,6 +379,9 @@
                         <a class="icon-button {% if not weekly_roundup %}active{% endif %}" href="{{ table_view_link }}">Table</a>
                         <a class="icon-button {% if weekly_roundup %}active{% endif %}" href="{{ weekly_roundup_link }}">Weekly Roundup</a>
                     </div>
+                    {% if not weekly_roundup %}
+                    <a class="icon-button" href="{{ table_export_link }}">Download to Excel</a>
+                    {% endif %}
                     <a
                         class="icon-button"
                         href="{{ url_for('index', tab='incidents', view=view_mode, year=year, month=month_selection, quarter=quarter_selection, pillar=pillar_filter, product=product_filter, rca_classification=rca_classification_filter, severity=severity_filter) }}"
