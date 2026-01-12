@@ -1849,7 +1849,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     quarter_str = request.args.get("quarter")
     weekly_roundup = request.args.get("weekly_roundup") == "1"
     roundup_start_param = request.args.get("roundup_start") or ""
-    roundup_end_param = request.args.get("roundup_end") or ""
     missing_only = request.args.get("missing_only") == "1"
     incident_duration_enabled = request.args.get("incident_duration") == "1"
     incident_multi_day_only = incident_duration_enabled and request.args.get(
@@ -2195,19 +2194,15 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
     def compute_roundup_window():
         app_today = datetime.now(ZoneInfo("America/New_York")).date()
-        explicit_start = parse_date(roundup_start_param) if roundup_start_param else None
-        explicit_end = parse_date(roundup_end_param) if roundup_end_param else None
+        explicit_date = parse_date(roundup_start_param) if roundup_start_param else None
 
-        if explicit_start or explicit_end:
-            start_date = explicit_start or (explicit_end - timedelta(days=6))
-            end_date = explicit_end or (start_date + timedelta(days=6))
+        if explicit_date:
+            start_date = explicit_date - timedelta(days=explicit_date.weekday())
+            end_date = start_date + timedelta(days=6)
         else:
             current_week_start = app_today - timedelta(days=app_today.weekday())
             end_date = current_week_start - timedelta(days=1)
             start_date = end_date - timedelta(days=6)
-
-        if end_date < start_date:
-            start_date, end_date = end_date, start_date
 
         return start_date, end_date
 
@@ -2215,7 +2210,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     prior_roundup_start = roundup_start - timedelta(days=7)
     prior_roundup_end = roundup_end - timedelta(days=7)
     roundup_start_value = roundup_start.isoformat()
-    roundup_end_value = roundup_end.isoformat()
 
     incident_filters = []
     other_filters = []
@@ -2293,7 +2287,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         if target_tab == "table" and weekly_roundup:
             params["weekly_roundup"] = "1"
             params["roundup_start"] = roundup_start_value
-            params["roundup_end"] = roundup_end_value
             if missing_only:
                 params["missing_only"] = "1"
 
@@ -2619,7 +2612,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         if weekly:
             params["weekly_roundup"] = "1"
             params["roundup_start"] = roundup_start_value
-            params["roundup_end"] = roundup_end_value
             if missing_only:
                 params["missing_only"] = "1"
         return url_for("index", **params)
@@ -2699,7 +2691,6 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         weekly_roundup_weeks=weekly_roundup_weeks,
         weekly_roundup_header=weekly_roundup_header,
         roundup_start_value=roundup_start_value,
-        roundup_end_value=roundup_end_value,
         missing_only=missing_only,
         table_view_link=table_view_link,
         weekly_roundup_link=weekly_roundup_link,

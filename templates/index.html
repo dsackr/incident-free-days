@@ -395,7 +395,6 @@
                 {% if weekly_roundup %}
                 <input type="hidden" name="weekly_roundup" value="1" />
                 <input type="hidden" name="roundup_start" value="{{ roundup_start_value }}" />
-                <input type="hidden" name="roundup_end" value="{{ roundup_end_value }}" />
                 {% if missing_only %}
                 <input type="hidden" name="missing_only" value="1" />
                 {% endif %}
@@ -608,14 +607,10 @@
                         <input type="hidden" name="severity" value="{{ severity }}" />
                         {% endfor %}
                         <label>
-                            Week start
+                            Week of (Monday)
                             <input type="date" name="roundup_start" value="{{ roundup_start_value }}" />
                         </label>
-                        <label>
-                            Week end
-                            <input type="date" name="roundup_end" value="{{ roundup_end_value }}" />
-                        </label>
-                        <button type="submit" class="secondary-button">Apply range</button>
+                        <button type="submit" class="secondary-button">Apply week</button>
                     </form>
                     <label class="checkbox-option compact weekly-roundup-toggle">
                         <input type="checkbox" id="weekly-missing-toggle" {% if missing_only %}checked{% endif %} />
