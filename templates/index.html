@@ -46,15 +46,15 @@
             <div id="incident-export-target">
                 <div class="calendar-header">
                     <div class="calendar-nav">
-                        <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
+                        <a class="icon-button icon-only" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
                         <div class="current-period">{{ current_period_label }}</div>
-                        <a class="icon-button" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
+                        <a class="icon-button icon-only" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
                     </div>
                     <div class="calendar-actions">
                         <div class="view-toggle" role="group" aria-label="Calendar view toggle">
-                            <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
-                            <a class="icon-button {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
-                            <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                            <a class="icon-button icon-only {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                            <a class="icon-button icon-only {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
+                            <a class="icon-button icon-only {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
                         </div>
                         <button
                             type="button"
@@ -371,9 +371,9 @@
                 </div>
                 <div class="table-actions">
                     <div class="view-toggle" role="group" aria-label="Table view toggle">
-                        <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
-                        <a class="icon-button {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
-                        <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                        <a class="icon-button icon-only {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                        <a class="icon-button icon-only {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
+                        <a class="icon-button icon-only {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
                     </div>
                     <div class="view-toggle" role="group" aria-label="Incident table view toggle">
                         <a class="icon-button {% if not weekly_roundup %}active{% endif %}" href="{{ table_view_link }}">Table</a>
@@ -853,15 +853,15 @@
             <div id="other-export-target">
                 <div class="calendar-header">
                     <div class="calendar-nav">
-                        <a class="icon-button" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
+                        <a class="icon-button icon-only" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
                         <div class="current-period">{{ current_period_label }}</div>
-                        <a class="icon-button" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
+                        <a class="icon-button icon-only" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
                     </div>
                           <div class="calendar-actions">
                               <div class="view-toggle" role="group" aria-label="Calendar view toggle">
-                                  <a class="icon-button {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
-                                  <a class="icon-button {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
-                                  <a class="icon-button {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                                  <a class="icon-button icon-only {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                                  <a class="icon-button icon-only {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
+                                  <a class="icon-button icon-only {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
                               </div>
                           </div>
                 </div>

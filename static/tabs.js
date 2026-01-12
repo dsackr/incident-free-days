@@ -90,13 +90,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const tableHeader = `
             <tr>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Date</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Incident</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Jira</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Product</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Impact duration</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">RCA</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de;">Completeness</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:12%; word-break:break-word; white-space:normal;">Date</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Incident</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:12%; word-break:break-word; white-space:normal;">Jira</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:22%; word-break:break-word; white-space:normal;">Product</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Impact duration</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:13%; word-break:break-word; white-space:normal;">RCA</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:13%; word-break:break-word; white-space:normal;">Completeness</th>
             </tr>
         `;
 
@@ -121,21 +121,21 @@ document.addEventListener("DOMContentLoaded", function () {
                                 : `Missing: ${escapeHtml(missingFields.join(", "))}`;
                         return `
                             <tr>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
                                     incident.reported_at_display || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${incidentLink}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${jiraLink}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${incidentLink}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${jiraLink}</td>
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
                                     incident.product || "Missing"
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
                                     incident.duration_label || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
                                     incident.rca_classification || ""
                                 )}</td>
-                                <td style="padding:6px; border:1px solid #d0d7de;">${escapeHtml(
+                                <td style="padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;">${escapeHtml(
                                     completenessText
                                 )}</td>
                             </tr>
@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     week.total_duration_label || "0m"
                 )}
                     </p>
-                    <table style="border-collapse:collapse; width:100%; font-size:12px; font-family:Arial, sans-serif;">
+                    <table style="border-collapse:collapse; width:100%; table-layout:fixed; font-size:12px; font-family:Arial, sans-serif;">
                         <thead>${tableHeader}</thead>
                         <tbody>${emptyRow}</tbody>
                     </table>
@@ -164,6 +164,19 @@ document.addEventListener("DOMContentLoaded", function () {
             .join("");
 
         return `${header}${tables}`;
+    };
+
+    const copyFallbackText = (value) => {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return success;
     };
 
     const copyWeeklyHtml = async () => {
@@ -184,6 +197,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 ]);
             } else if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(html);
+            } else {
+                const success = copyFallbackText(html);
+                if (!success) {
+                    throw new Error("Clipboard unavailable");
+                }
             }
             if (weeklyCopyStatus) weeklyCopyStatus.textContent = "Copied HTML to clipboard.";
         } catch (err) {
