@@ -126,6 +126,9 @@ document.addEventListener("DOMContentLoaded", function () {
             .map((week) => {
                 const rows = (week.incidents || [])
                     .map((incident) => {
+                        const rowStyle = incident.long_impact
+                            ? "background:#fecaca; color:#7f1d1d;"
+                            : "";
                         const incidentLink = incident.incident_url
                             ? `<a href="${escapeHtml(incident.incident_url)}">${escapeHtml(
                                   incident.incident_label
@@ -137,7 +140,7 @@ document.addEventListener("DOMContentLoaded", function () {
                               )}</a>`
                             : "—";
                         return `
-                            <tr>
+                            <tr style="${rowStyle}">
                                 <td style="${baseCellStyle}">${escapeHtml(
                                     incident.reported_at_display || ""
                                 )}</td>

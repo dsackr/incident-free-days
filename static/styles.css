@@ -1343,6 +1343,11 @@ h1 {
     background: #fdba74;
 }
 
+.incidents-table tr.incident-row-long-impact td {
+    background: #fecaca;
+    color: #7f1d1d;
+}
+
 .incidents-table td.duration-alert-yellow {
     background: #fff3a1;
 }

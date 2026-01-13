@@ -659,7 +659,10 @@
                             <tbody>
                                 {% if week.incidents %}
                                     {% for incident in week.incidents %}
-                                    <tr data-missing="{{ 'true' if incident.missing_fields else 'false' }}">
+                                    <tr
+                                        data-missing="{{ 'true' if incident.missing_fields else 'false' }}"
+                                        class="{% if incident.long_impact %}incident-row-long-impact{% endif %}"
+                                    >
                                         <td>{{ incident.reported_at_display }}</td>
                                         <td>
                                             {% if incident.incident_url and incident.incident_id %}
