@@ -645,6 +645,7 @@
                                     <th>Severity</th>
                                     <th>Pillar</th>
                                     <th>Product</th>
+                                    <th>Title</th>
                                     <th>Client impact duration</th>
                                     <th>RCA Classification</th>
                                     <th>Incident lead</th>
@@ -676,6 +677,7 @@
                                         <td class="{% if incident.missing_severity %}missing-field{% endif %}">{{ incident.severity or 'Missing' }}</td>
                                         <td class="{% if incident.missing_pillar %}missing-field{% endif %}">{{ incident.pillar or 'Missing' }}</td>
                                         <td class="{% if incident.missing_product %}missing-field{% endif %}">{{ incident.product or 'Missing' }}</td>
+                                        <td>{{ incident.title or '—' }}</td>
                                         <td class="{% if incident.missing_duration %}missing-field{% endif %}">{{ incident.duration_label }}</td>
                                         <td class="{% if incident.missing_rca %}missing-field{% endif %}">{{ incident.rca_classification }}</td>
                                         <td class="{% if incident.missing_incident_lead %}missing-field{% endif %}">
@@ -685,7 +687,7 @@
                                     {% endfor %}
                                 {% else %}
                                     <tr>
-                                        <td colspan="9">No incidents in this window.</td>
+                                        <td colspan="10">No incidents in this window.</td>
                                     </tr>
                                 {% endif %}
                             </tbody>
