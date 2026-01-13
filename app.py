@@ -2564,8 +2564,8 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
     def build_roundup_week(label, start_date, end_date):
         rows = []
-        total_duration = 0
-        for incident in incidents:
+        duration_by_incident = {}
+        for index, incident in enumerate(incidents):
             if not incident_matches_filters(incident):
                 continue
             reported_date = parse_date(incident.get("reported_at") or incident.get("date"))
@@ -2576,9 +2576,15 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             if missing_only and not row["missing_fields"]:
                 continue
             rows.append(row)
-            total_duration += row["duration_seconds"] or 0
+            incident_key = row["incident_id"] or f"row-{index}"
+            duration = row["duration_seconds"] or 0
+            if incident_key in duration_by_incident:
+                duration_by_incident[incident_key] = max(duration_by_incident[incident_key], duration)
+            else:
+                duration_by_incident[incident_key] = duration
 
         rows.sort(key=lambda item: item["reported_at_sort"], reverse=True)
+        total_duration = sum(duration_by_incident.values())
         return {
             "label": label,
             "range_label": format_range_label(start_date, end_date),
