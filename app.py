@@ -52,6 +52,7 @@ LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 PROCEDURAL_RCA_EXCLUSIONS = {"non-procedural incident", "not classified"}
 MISSING_RCA_VALUES = {"not classified", "unknown", "unclassified"}
+LONG_IMPACT_THRESHOLD_SECONDS = 24 * 60 * 60
 
 # 6-color palette for E-Paper display
 OSHA_PALETTE = {
@@ -2442,7 +2443,14 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             and "non-procedural" not in normalized
             and "non procedural" not in normalized
         )
-        incident["table_row_class"] = "incident-row-procedural" if is_procedural else ""
+        duration_seconds = get_client_impact_duration_seconds(incident)
+        is_long_impact = duration_seconds > LONG_IMPACT_THRESHOLD_SECONDS
+        row_classes = []
+        if is_procedural:
+            row_classes.append("incident-row-procedural")
+        if is_long_impact:
+            row_classes.append("incident-row-long-impact")
+        incident["table_row_class"] = " ".join(row_classes)
         reported_source = incident.get("reported_at") or incident.get("date") or ""
         reported_date = parse_date(reported_source) if reported_source else None
         incident["reported_at_display"] = (
@@ -2527,6 +2535,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         if not product:
             missing_fields.append("Product")
         duration_seconds = get_client_impact_duration_seconds(incident)
+        is_long_impact = duration_seconds > LONG_IMPACT_THRESHOLD_SECONDS
         if not duration_seconds:
             missing_fields.append("Impact duration")
         rca_classification = (incident.get("rca_classification") or "").strip()
@@ -2551,6 +2560,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             "duration_label": format_duration_short(duration_seconds)
             if duration_seconds
             else "Missing",
+            "long_impact": is_long_impact,
             "rca_classification": rca_classification or "Missing",
             "incident_lead": incident_lead,
             "missing_fields": missing_fields,
