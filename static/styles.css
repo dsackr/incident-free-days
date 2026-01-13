@@ -1214,6 +1214,44 @@ h1 {
     gap: 8px;
 }
 
+.weekly-roundup-header {
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.weekly-roundup-summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.weekly-roundup-impact {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    min-width: 180px;
+}
+
+.weekly-roundup-impact .impact-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+
+.weekly-roundup-impact .impact-value {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 .weekly-roundup-card {
     margin-top: 12px;
 }

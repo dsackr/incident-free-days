@@ -625,14 +625,19 @@
 
                 {% for week in weekly_roundup_weeks %}
                 <div class="table-card weekly-roundup-card">
-                    <div class="table-card-header">
+                    <div class="table-card-header weekly-roundup-header">
                         <div>
                             <h4>{{ week.label }}</h4>
                             <p class="helper-text small">{{ week.range_label }}</p>
                         </div>
-                        <div class="weekly-roundup-stats">
-                            <span class="stat-chip">Incidents: {{ week.incident_count }}</span>
-                            <span class="stat-chip">Total client impact: {{ week.total_duration_label }}</span>
+                        <div class="weekly-roundup-summary">
+                            <div class="weekly-roundup-impact">
+                                <span class="impact-label">Total client impact</span>
+                                <span class="impact-value">{{ week.total_duration_label }}</span>
+                            </div>
+                            <div class="weekly-roundup-stats">
+                                <span class="stat-chip">Incidents: {{ week.incident_count }}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="table-scroll">
