@@ -122,50 +122,82 @@ document.addEventListener("DOMContentLoaded", function () {
             "padding:6px; border:1px solid #d0d7de; word-break:break-word; white-space:normal;";
         const missingCellStyle = `${baseCellStyle} background:#fee2e2; color:#7f1d1d; font-weight:600;`;
 
+        const groupRowStyle =
+            "background:#f8fafc; border-top:2px solid #e2e8f0; font-weight:600; font-family:Arial, sans-serif;";
+        const groupCellStyle = `${baseCellStyle} font-size:12px;`;
+
         const tables = data.weeks
             .map((week) => {
-                const rows = (week.incidents || [])
-                    .map((incident) => {
-                        const rowStyle = incident.long_impact
-                            ? "background:#fecaca; color:#7f1d1d;"
-                            : "";
-                        const incidentLink = incident.incident_url
-                            ? `<a href="${escapeHtml(incident.incident_url)}">${escapeHtml(
-                                  incident.incident_label
-                              )}</a>`
-                            : escapeHtml(incident.incident_label || "—");
-                        const jiraLink = incident.jira_url
-                            ? `<a href="${escapeHtml(incident.jira_url)}">${escapeHtml(
-                                  incident.incident_label
-                              )}</a>`
-                            : "—";
-                        return `
-                            <tr style="${rowStyle}">
-                                <td style="${baseCellStyle}">${escapeHtml(
-                                    incident.reported_at_display || ""
-                                )}</td>
-                                <td style="${baseCellStyle}">${incidentLink}</td>
-                                <td style="${baseCellStyle}">${jiraLink}</td>
-                                <td style="${incident.missing_severity ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    incident.severity || "Missing"
-                                )}</td>
-                                <td style="${incident.missing_pillar ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    incident.pillar || "Missing"
-                                )}</td>
-                                <td style="${incident.missing_product ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    incident.product || "Missing"
-                                )}</td>
-                                <td style="${incident.missing_duration ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    incident.duration_label || ""
-                                )}</td>
-                                <td style="${incident.missing_rca ? missingCellStyle : baseCellStyle}">${escapeHtml(
-                                    incident.rca_classification || ""
-                                )}</td>
-                                <td style="${
-                                    incident.missing_incident_lead ? missingCellStyle : baseCellStyle
-                                }">${escapeHtml(incident.incident_lead || "Missing")}</td>
+                const groups =
+                    week.pillar_groups && week.pillar_groups.length
+                        ? week.pillar_groups
+                        : week.incidents && week.incidents.length
+                          ? [
+                                {
+                                    pillar: "All",
+                                    incident_count: week.incidents.length,
+                                    incidents: week.incidents,
+                                },
+                            ]
+                          : [];
+                const rows = groups
+                    .map((group) => {
+                        const groupLabel = escapeHtml(group.pillar || "Missing");
+                        const groupCount = escapeHtml(
+                            group.incident_count ?? (group.incidents || []).length
+                        );
+                        const groupHeader = `
+                            <tr style="${groupRowStyle}">
+                                <td colspan="9" style="${groupCellStyle}">
+                                    ${groupLabel} <span style="color:#64748b; font-weight:500;">(${groupCount} incidents)</span>
+                                </td>
                             </tr>
                         `;
+                        const incidentRows = (group.incidents || [])
+                            .map((incident) => {
+                                const rowStyle = incident.long_impact
+                                    ? "background:#fecaca; color:#7f1d1d;"
+                                    : "";
+                                const incidentLink = incident.incident_url
+                                    ? `<a href="${escapeHtml(incident.incident_url)}">${escapeHtml(
+                                          incident.incident_label
+                                      )}</a>`
+                                    : escapeHtml(incident.incident_label || "—");
+                                const jiraLink = incident.jira_url
+                                    ? `<a href="${escapeHtml(incident.jira_url)}">${escapeHtml(
+                                          incident.incident_label
+                                      )}</a>`
+                                    : "—";
+                                return `
+                                    <tr style="${rowStyle}">
+                                        <td style="${baseCellStyle}">${escapeHtml(
+                                            incident.reported_at_display || ""
+                                        )}</td>
+                                        <td style="${baseCellStyle}">${incidentLink}</td>
+                                        <td style="${baseCellStyle}">${jiraLink}</td>
+                                        <td style="${
+                                            incident.missing_severity ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.severity || "Missing")}</td>
+                                        <td style="${
+                                            incident.missing_pillar ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.pillar || "Missing")}</td>
+                                        <td style="${
+                                            incident.missing_product ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.product || "Missing")}</td>
+                                        <td style="${
+                                            incident.missing_duration ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.duration_label || "")}</td>
+                                        <td style="${
+                                            incident.missing_rca ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.rca_classification || "")}</td>
+                                        <td style="${
+                                            incident.missing_incident_lead ? missingCellStyle : baseCellStyle
+                                        }">${escapeHtml(incident.incident_lead || "Missing")}</td>
+                                    </tr>
+                                `;
+                            })
+                            .join("");
+                        return `${groupHeader}${incidentRows}`;
                     })
                     .join("");
 

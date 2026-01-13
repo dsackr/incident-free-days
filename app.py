@@ -2594,6 +2594,33 @@ def render_dashboard(tab_override=None, show_config_tab=False):
                 duration_by_incident[incident_key] = duration
 
         rows.sort(key=lambda item: item["reported_at_sort"], reverse=True)
+        grouped_by_pillar = defaultdict(list)
+        for row in rows:
+            pillar_label = row["pillar"] or "Missing"
+            grouped_by_pillar[pillar_label].append(row)
+
+        pillar_groups = []
+        for pillar_label, group_rows in grouped_by_pillar.items():
+            group_rows.sort(
+                key=lambda item: (
+                    not (item["product"] or "").strip(),
+                    (item["product"] or "").strip().casefold(),
+                )
+            )
+            pillar_groups.append(
+                {
+                    "pillar": pillar_label,
+                    "incident_count": len(group_rows),
+                    "incidents": group_rows,
+                }
+            )
+        pillar_groups.sort(
+            key=lambda group: (
+                group["pillar"] == "Missing",
+                group["pillar"].casefold(),
+            )
+        )
+
         total_duration = sum(duration_by_incident.values())
         return {
             "label": label,
@@ -2604,6 +2631,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             "total_duration_label": format_duration_short(total_duration),
             "total_duration_seconds": total_duration,
             "incidents": rows,
+            "pillar_groups": pillar_groups,
         }
 
     weekly_roundup_weeks = [
