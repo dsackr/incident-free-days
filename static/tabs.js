@@ -87,9 +87,21 @@ document.addEventListener("DOMContentLoaded", function () {
     const buildEmailHtml = (data) => {
         if (!data || !data.weeks) return "";
         const header = `
-            <h2 style="margin:0 0 16px 0; font-size:18px; font-family:Arial, sans-serif;">${escapeHtml(
-                buildWeeklyTitle(data)
-            )}</h2>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0;">
+                <tr>
+                    <td align="center">
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; max-width:720px; border-collapse:collapse;">
+                            <tr>
+                                <td>
+                                    <h2 style="margin:0; font-size:18px; font-family:Arial, sans-serif;">${escapeHtml(
+                                        buildWeeklyTitle(data)
+                                    )}</h2>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
         `;
 
         const tableHeader = `
@@ -100,7 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Severity</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Pillar</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Product</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Impact duration</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Client impact duration</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">RCA</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Incident lead</th>
             </tr>
@@ -157,18 +169,43 @@ document.addEventListener("DOMContentLoaded", function () {
                 const emptyRow =
                     rows ||
                     `<tr><td colspan="9" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
+                const weekLabel = escapeHtml(week.label || "");
+                const weekRange = escapeHtml(week.range_label || "");
+                const weekImpact = escapeHtml(week.total_duration_label || "0m");
+                const weekCount = escapeHtml(week.incident_count || 0);
                 return `
-                    <h3 style="margin:16px 0 6px 0; font-size:14px; font-family:Arial, sans-serif;">
-                        ${escapeHtml(week.label)} (${escapeHtml(week.range_label || "")})
-                    </h3>
-                    <p style="margin:0 0 8px 0; font-size:12px; font-family:Arial, sans-serif;">
-                        Incidents: ${escapeHtml(week.incident_count)} · Total client impact: ${escapeHtml(
-                    week.total_duration_label || "0m"
-                )}
-                    </p>
-                    <table style="border-collapse:collapse; width:100%; max-width:720px; margin:0 auto; table-layout:fixed; font-size:12px; font-family:Arial, sans-serif;">
-                        <thead>${tableHeader}</thead>
-                        <tbody>${emptyRow}</tbody>
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; margin:0 0 12px 0;">
+                        <tr>
+                            <td align="center">
+                                <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; max-width:720px; border-collapse:collapse;">
+                                    <tr>
+                                        <td style="padding:0 0 8px 0; font-family:Arial, sans-serif;">
+                                            <div style="font-size:14px; font-weight:700; margin:0 0 4px 0;">${weekLabel}</div>
+                                            <div style="font-size:12px; color:#4b5563;">${weekRange}</div>
+                                        </td>
+                                        <td style="padding:0 0 8px 0; text-align:right; font-family:Arial, sans-serif; white-space:nowrap;">
+                                            <div style="display:inline-block; padding:6px 12px; border:1px solid #fed7aa; background:#fff7ed; border-radius:10px; text-align:left;">
+                                                <div style="font-size:10px; font-weight:600; color:#9a3412; text-transform:uppercase; letter-spacing:0.04em;">Total client impact</div>
+                                                <div style="font-size:16px; font-weight:700; color:#9a3412; margin-top:2px;">${weekImpact}</div>
+                                            </div>
+                                        </td>
+                                        <td style="padding:0 0 8px 8px; text-align:right; font-family:Arial, sans-serif; white-space:nowrap;">
+                                            <div style="display:inline-block; padding:6px 10px; background:#e0e7ff; color:#1d4ed8; border-radius:999px; font-size:12px; font-weight:600;">Incidents: ${weekCount}</div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0;">
+                        <tr>
+                            <td align="center">
+                                <table style="border-collapse:collapse; width:100%; max-width:720px; table-layout:fixed; font-size:12px; font-family:Arial, sans-serif;">
+                                    <thead>${tableHeader}</thead>
+                                    <tbody>${emptyRow}</tbody>
+                                </table>
+                            </td>
+                        </tr>
                     </table>
                 `;
             })
