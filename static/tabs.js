@@ -79,13 +79,17 @@ document.addEventListener("DOMContentLoaded", function () {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
 
+    const buildWeeklyTitle = (data) => {
+        if (!data?.header) return "Weekly Incident Roundup";
+        return `Weekly Incident Roundup (${data.header})`;
+    };
+
     const buildEmailHtml = (data) => {
         if (!data || !data.weeks) return "";
         const header = `
-            <h2 style="margin:0 0 8px 0; font-size:18px; font-family:Arial, sans-serif;">Weekly Incident Roundup</h2>
-            <p style="margin:0 0 16px 0; font-size:12px; font-family:Arial, sans-serif;">${escapeHtml(
-                data.header || ""
-            )}</p>
+            <h2 style="margin:0 0 16px 0; font-size:18px; font-family:Arial, sans-serif;">${escapeHtml(
+                buildWeeklyTitle(data)
+            )}</h2>
         `;
 
         const tableHeader = `
@@ -173,6 +177,24 @@ document.addEventListener("DOMContentLoaded", function () {
         return `${header}${tables}`;
     };
 
+    const buildDownloadHtml = (data) => {
+        const body = buildEmailHtml(data);
+        if (!body) return "";
+        const title = buildWeeklyTitle(data);
+        return `
+            <!doctype html>
+            <html lang="en">
+                <head>
+                    <meta charset="utf-8" />
+                    <title>${escapeHtml(title)}</title>
+                </head>
+                <body style="margin:16px;">
+                    ${body}
+                </body>
+            </html>
+        `;
+    };
+
     const copyFallbackHtml = (value) => {
         const container = document.createElement("div");
         container.setAttribute("contenteditable", "true");
@@ -223,7 +245,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const downloadWeeklyHtml = () => {
         if (!weeklyData) return;
-        const html = buildEmailHtml(weeklyData);
+        const html = buildDownloadHtml(weeklyData);
         if (!html) return;
         const blob = new Blob([html], { type: "text/html" });
         const url = URL.createObjectURL(blob);
