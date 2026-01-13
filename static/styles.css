@@ -1256,6 +1256,22 @@ h1 {
     margin-top: 12px;
 }
 
+.weekly-roundup-group td {
+    background: #f8fafc;
+    border-top: 2px solid #e2e8f0;
+    font-weight: 600;
+}
+
+.weekly-roundup-group-label {
+    font-size: 13px;
+}
+
+.weekly-roundup-group-count {
+    font-size: 12px;
+    color: #64748b;
+    margin-left: 8px;
+}
+
 .stat-chip {
     display: inline-flex;
     align-items: center;
