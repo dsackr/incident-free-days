@@ -112,6 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Severity</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Pillar</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Product</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:22%; word-break:break-word; white-space:normal;">Title</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Client impact duration</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">RCA</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Incident lead</th>
@@ -148,7 +149,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         );
                         const groupHeader = `
                             <tr style="${groupRowStyle}">
-                                <td colspan="9" style="${groupCellStyle}">
+                                <td colspan="10" style="${groupCellStyle}">
                                     ${groupLabel} <span style="color:#64748b; font-weight:500;">(${groupCount} incidents)</span>
                                 </td>
                             </tr>
@@ -184,6 +185,7 @@ document.addEventListener("DOMContentLoaded", function () {
                                         <td style="${
                                             incident.missing_product ? missingCellStyle : baseCellStyle
                                         }">${escapeHtml(incident.product || "Missing")}</td>
+                                        <td style="${baseCellStyle}">${escapeHtml(incident.title || "—")}</td>
                                         <td style="${
                                             incident.missing_duration ? missingCellStyle : baseCellStyle
                                         }">${escapeHtml(incident.duration_label || "")}</td>
@@ -203,7 +205,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 const emptyRow =
                     rows ||
-                    `<tr><td colspan="9" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
+                    `<tr><td colspan="10" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
                 const weekLabel = escapeHtml(week.label || "");
                 const weekRange = escapeHtml(week.range_label || "");
                 const weekImpact = escapeHtml(week.total_duration_label || "0m");
