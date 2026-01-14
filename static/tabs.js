@@ -897,6 +897,7 @@ document.addEventListener("DOMContentLoaded", function () {
             "product",
             "pillar",
             "severity",
+            "status",
             "title",
             "rca_classification",
             "incident_lead",
