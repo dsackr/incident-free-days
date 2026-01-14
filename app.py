@@ -1528,6 +1528,17 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
     else:
         severity = str(severity_raw).strip() if severity_raw else ""
 
+    status_raw = api_incident.get("status") or api_incident.get("incident_status")
+    if isinstance(status_raw, dict):
+        status = (
+            status_raw.get("name")
+            or status_raw.get("label")
+            or status_raw.get("summary")
+            or ""
+        )
+    else:
+        status = str(status_raw).strip() if status_raw else ""
+
     reported_date, reported_raw = _extract_reported_date(api_incident)
     if not reported_date:
         return []
@@ -1577,6 +1588,7 @@ def normalize_incident_payloads(api_incident, mapping=None, field_mapping=None):
                 "inc_number": inc_number,
                 "date": reported_date.isoformat(),
                 "severity": severity,
+                "status": status,
                 "product": product or "Unknown",
                 "pillar": resolved_pillar or pillar_hint or "Unknown",
                 "reported_at": reported_raw
@@ -3553,6 +3565,7 @@ def add_incident():
             "duration_seconds": duration_seconds,
             "client_impact_duration_seconds": duration_seconds if event_type == "Operational Incident" else 0,
             "severity": severity,
+            "status": "",
             "pillar": pillar,
             "product": product,
             "event_type": event_type,
@@ -3614,6 +3627,7 @@ def upload_csv():
     for row in reader:
         inc_number = (row.get("ID") or "").strip()
         severity = (row.get("Severity") or "").strip()
+        status = (row.get("Status") or "").strip()
         product_raw = (row.get("Product") or "").strip()
         raw_reported_at = (row.get("Reported at") or "").strip()
         raw_closed_at = (row.get("Closed at") or "").strip()
@@ -3650,6 +3664,7 @@ def upload_csv():
                 "duration_seconds": duration_seconds,
                 "client_impact_duration_seconds": duration_seconds if event_type == "Operational Incident" else 0,
                 "severity": severity,
+                "status": status,
                 "pillar": pillar,
                 "product": product,
                 "event_type": event_type,
@@ -3773,6 +3788,14 @@ def build_troubleshooting_payload():
 
 @app.route("/sync/download/json", methods=["GET"])
 def download_sync_json():
+    if os.path.exists(DATA_FILE):
+        return send_file(
+            DATA_FILE,
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=os.path.basename(DATA_FILE),
+        )
+
     payload = build_troubleshooting_payload()
     buffer = BytesIO()
     buffer.write(json.dumps(payload, indent=2).encode("utf-8"))

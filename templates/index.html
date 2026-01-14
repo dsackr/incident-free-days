@@ -746,6 +746,7 @@
                                 <option value="duration_seconds">Client impact duration</option>
                                 <option value="rca_classification">RCA Classification</option>
                                 <option value="incident_lead">Incident Lead</option>
+                                <option value="status">Status</option>
                             </select>
                         </label>
 
@@ -768,6 +769,7 @@
                                 <option value="title">Title</option>
                                 <option value="rca_classification">RCA Classification</option>
                                 <option value="incident_lead">Incident Lead</option>
+                                <option value="status">Status</option>
                             </select>
                         </label>
 
@@ -797,6 +799,7 @@
                                 <th data-sort-key="duration_seconds" aria-sort="none">Client impact duration</th>
                                 <th data-sort-key="rca_classification" aria-sort="none">RCA Classification</th>
                                 <th data-sort-key="incident_lead" aria-sort="none">Incident Lead</th>
+                                <th data-sort-key="status" aria-sort="none">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -821,6 +824,7 @@
                                 data-reported_at="{{ incident.reported_at or incident.date or '' }}"
                                 data-duration_seconds="{{ '' if incident.client_impact_duration_seconds is none else incident.client_impact_duration_seconds }}"
                                 data-severity="{{ incident.severity or '' }}"
+                                data-status="{{ incident.status or '' }}"
                                 data-incident_lead="{{ incident.incident_lead or '' }}"
                             >
                                 <td>{{ incident.reported_at_display or '—' }}</td>
@@ -856,6 +860,7 @@
                                 <td class="incident-duration-cell">{{ duration_label or '—' }}</td>
                                 <td class="{{ incident.rca_cell_class }}">{{ incident.rca_classification or '—' }}</td>
                                 <td>{{ incident.incident_lead or '—' }}</td>
+                                <td>{{ incident.status or '—' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
