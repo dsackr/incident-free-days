@@ -1341,6 +1341,38 @@
                 <div class="config-card">
                     <div class="config-card-header">
                         <div>
+                            <h3>Troubleshooting</h3>
+                            <p class="helper-text">Download the local JSON payloads or inspect raw incident.io data by ID.</p>
+                        </div>
+                    </div>
+
+                    <div class="button-row">
+                        <a class="secondary-button" href="{{ url_for('download_sync_json') }}">Download local JSON</a>
+                    </div>
+
+                    <label class="form-row">
+                        <span>Incident ID</span>
+                        <input
+                            type="text"
+                            id="incident-lookup-id"
+                            name="incident_lookup_id"
+                            placeholder="Incident ID from incident.io"
+                        />
+                        <span class="helper-text small">Uses the configured API token or the INCIDENT_IO_API_TOKEN env var.</span>
+                    </label>
+
+                    <div class="button-row">
+                        <button type="button" class="secondary-button" id="incident-lookup-btn">Fetch incident payload</button>
+                        <button type="button" class="ghost-button" id="incident-lookup-clear" disabled>Clear</button>
+                    </div>
+
+                    <div id="incident-lookup-status" class="helper-text small" aria-live="polite"></div>
+                    <pre id="incident-lookup-output" class="json-output" hidden></pre>
+                </div>
+
+                <div class="config-card">
+                    <div class="config-card-header">
+                        <div>
                             <h3>Product → pillar key</h3>
                             <p class="helper-text">View how products are grouped under each pillar from the uploaded mapping.</p>
                         </div>

@@ -1220,6 +1220,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const previewBody = document.getElementById("mapping-preview-body");
     const statusPillContainer = document.getElementById("sync-status-pill");
     const syncConfigData = readJsonFromScript("sync-config-data") || {};
+    const incidentLookupInput = document.getElementById("incident-lookup-id");
+    const incidentLookupButton = document.getElementById("incident-lookup-btn");
+    const incidentLookupClear = document.getElementById("incident-lookup-clear");
+    const incidentLookupStatus = document.getElementById("incident-lookup-status");
+    const incidentLookupOutput = document.getElementById("incident-lookup-output");
 
     const setStatusPill = (status, text) => {
         if (!statusPillContainer) return;
@@ -1390,10 +1395,90 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     };
 
+    const setIncidentLookupStatus = (message, state) => {
+        if (!incidentLookupStatus) return;
+        incidentLookupStatus.textContent = message || "";
+        if (state) {
+            incidentLookupStatus.dataset.state = state;
+        } else {
+            incidentLookupStatus.removeAttribute("data-state");
+        }
+    };
+
+    const clearIncidentLookup = () => {
+        if (incidentLookupInput) {
+            incidentLookupInput.value = "";
+        }
+        if (incidentLookupOutput) {
+            incidentLookupOutput.textContent = "";
+            incidentLookupOutput.hidden = true;
+        }
+        if (incidentLookupClear) {
+            incidentLookupClear.disabled = true;
+        }
+        setIncidentLookupStatus("");
+    };
+
+    const handleIncidentLookup = async () => {
+        const incidentId = incidentLookupInput?.value?.trim();
+        if (!incidentId) {
+            setIncidentLookupStatus("Enter an incident ID first.", "warning");
+            return;
+        }
+
+        setIncidentLookupStatus("Fetching incident payload…", "info");
+        if (incidentLookupOutput) {
+            incidentLookupOutput.hidden = true;
+        }
+        if (incidentLookupButton) {
+            incidentLookupButton.disabled = true;
+        }
+
+        try {
+            const response = await fetch(`/sync/incident/${encodeURIComponent(incidentId)}`);
+            const data = await response.json();
+
+            if (!response.ok) {
+                setIncidentLookupStatus(data?.error || "Unable to fetch incident payload.", "error");
+                return;
+            }
+
+            if (incidentLookupOutput) {
+                incidentLookupOutput.textContent = JSON.stringify(data, null, 2);
+                incidentLookupOutput.hidden = false;
+            }
+            if (incidentLookupClear) {
+                incidentLookupClear.disabled = false;
+            }
+            setIncidentLookupStatus("Payload received.", "success");
+        } catch (err) {
+            console.error("Incident lookup failed", err);
+            setIncidentLookupStatus("Unable to reach incident.io.", "error");
+        } finally {
+            if (incidentLookupButton) {
+                incidentLookupButton.disabled = false;
+            }
+        }
+    };
+
     if (syncConfigData?.last_sync_display) {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync_display} ET`);
     } else if (syncConfigData?.last_sync?.timestamp) {
         setStatusPill("info", `Last sync ${syncConfigData.last_sync.timestamp}`);
+    }
+
+    if (incidentLookupButton && incidentLookupInput) {
+        incidentLookupButton.addEventListener("click", handleIncidentLookup);
+        incidentLookupInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                handleIncidentLookup();
+            }
+        });
+    }
+
+    if (incidentLookupClear) {
+        incidentLookupClear.addEventListener("click", clearIncidentLookup);
     }
 
     const oshaForm = document.getElementById("send-osha-display-form");
