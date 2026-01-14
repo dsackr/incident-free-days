@@ -107,12 +107,11 @@ document.addEventListener("DOMContentLoaded", function () {
         const tableHeader = `
             <tr>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:12%; word-break:break-word; white-space:normal;">Date</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Incident</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:12%; word-break:break-word; white-space:normal;">Jira</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Severity</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Pillar</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Product</th>
-                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:22%; word-break:break-word; white-space:normal;">Title</th>
+                <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:26%; word-break:break-word; white-space:normal;">Title</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:14%; word-break:break-word; white-space:normal;">Client impact duration</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">RCA</th>
                 <th style="text-align:left; padding:6px; border:1px solid #d0d7de; width:10%; word-break:break-word; white-space:normal;">Incident lead</th>
@@ -149,7 +148,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         );
                         const groupHeader = `
                             <tr style="${groupRowStyle}">
-                                <td colspan="10" style="${groupCellStyle}">
+                                <td colspan="9" style="${groupCellStyle}">
                                     ${groupLabel} <span style="color:#64748b; font-weight:500;">(${groupCount} incidents)</span>
                                 </td>
                             </tr>
@@ -159,11 +158,6 @@ document.addEventListener("DOMContentLoaded", function () {
                                 const rowStyle = incident.long_impact
                                     ? "background:#fecaca; color:#7f1d1d;"
                                     : "";
-                                const incidentLink = incident.incident_url
-                                    ? `<a href="${escapeHtml(incident.incident_url)}">${escapeHtml(
-                                          incident.incident_label
-                                      )}</a>`
-                                    : escapeHtml(incident.incident_label || "—");
                                 const jiraLink = incident.jira_url
                                     ? `<a href="${escapeHtml(incident.jira_url)}">${escapeHtml(
                                           incident.incident_label
@@ -174,7 +168,6 @@ document.addEventListener("DOMContentLoaded", function () {
                                         <td style="${baseCellStyle}">${escapeHtml(
                                             incident.reported_at_display || ""
                                         )}</td>
-                                        <td style="${baseCellStyle}">${incidentLink}</td>
                                         <td style="${baseCellStyle}">${jiraLink}</td>
                                         <td style="${
                                             incident.missing_severity ? missingCellStyle : baseCellStyle
@@ -205,7 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 const emptyRow =
                     rows ||
-                    `<tr><td colspan="10" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
+                    `<tr><td colspan="9" style="padding:6px; border:1px solid #d0d7de;">No incidents in this window.</td></tr>`;
                 const weekLabel = escapeHtml(week.label || "");
                 const weekRange = escapeHtml(week.range_label || "");
                 const weekImpact = escapeHtml(week.total_duration_label || "0m");
