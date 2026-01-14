@@ -648,7 +648,6 @@
                                     <th>Incident</th>
                                     <th>Jira</th>
                                     <th>Severity</th>
-                                    <th>Pillar</th>
                                     <th>Product</th>
                                     <th>Title</th>
                                     <th>Client impact duration</th>
@@ -660,7 +659,7 @@
                                 {% if week.pillar_groups %}
                                     {% for group in week.pillar_groups %}
                                     <tr class="weekly-roundup-group">
-                                        <td colspan="10">
+                                        <td colspan="9">
                                             <span class="weekly-roundup-group-label">{{ group.pillar }}</span>
                                             <span class="weekly-roundup-group-count">{{ group.incident_count }} incidents</span>
                                         </td>
@@ -690,7 +689,6 @@
                                                 {% endif %}
                                             </td>
                                             <td class="{% if incident.missing_severity %}missing-field{% endif %}">{{ incident.severity or 'Missing' }}</td>
-                                            <td class="{% if incident.missing_pillar %}missing-field{% endif %}">{{ incident.pillar or 'Missing' }}</td>
                                             <td class="{% if incident.missing_product %}missing-field{% endif %}">{{ incident.product or 'Missing' }}</td>
                                             <td>{{ incident.title or '—' }}</td>
                                             <td class="{% if incident.missing_duration %}missing-field{% endif %}">{{ incident.duration_label }}</td>
@@ -703,7 +701,7 @@
                                     {% endfor %}
                                 {% else %}
                                     <tr>
-                                        <td colspan="10">No incidents in this window.</td>
+                                        <td colspan="9">No incidents in this window.</td>
                                     </tr>
                                 {% endif %}
                             </tbody>
