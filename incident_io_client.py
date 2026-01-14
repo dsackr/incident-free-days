@@ -120,3 +120,38 @@ def fetch_incidents(
         }
 
     return incidents
+
+
+def fetch_incident_details(
+    incident_id: str,
+    *,
+    base_url: Optional[str] = None,
+    token: Optional[str] = None,
+    timeout: int = 15,
+) -> Dict[str, Any]:
+    """Fetch a single incident payload from incident.io by incident ID."""
+
+    auth_token = token or os.getenv("INCIDENT_IO_API_TOKEN")
+    if not auth_token:
+        raise IncidentAPIError("INCIDENT_IO_API_TOKEN is not set")
+
+    if requests is None:
+        raise IncidentAPIError("The 'requests' package is required to sync incidents")
+
+    resolved_base_url = base_url or os.getenv("INCIDENT_IO_BASE_URL") or DEFAULT_BASE_URL
+    url = f"{resolved_base_url.rstrip('/')}/v2/incidents/{incident_id}"
+
+    try:
+        response = requests.get(url, headers=_build_headers(auth_token), timeout=timeout)
+    except requests.RequestException as exc:
+        raise IncidentAPIError(f"Failed to reach incident.io: {exc}") from exc
+
+    if response.status_code != 200:
+        raise IncidentAPIError(
+            f"incident.io returned {response.status_code}: {response.text[:200]}"
+        )
+
+    try:
+        return response.json()
+    except json.JSONDecodeError as exc:
+        raise IncidentAPIError("incident.io returned an invalid JSON response") from exc

@@ -3763,6 +3763,52 @@ def sync_incidents_endpoint():
     return jsonify(result), status_code
 
 
+def build_troubleshooting_payload():
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "incidents": load_events(DATA_FILE),
+        "other_events": load_events(OTHER_EVENTS_FILE),
+    }
+
+
+@app.route("/sync/download/json", methods=["GET"])
+def download_sync_json():
+    payload = build_troubleshooting_payload()
+    buffer = BytesIO()
+    buffer.write(json.dumps(payload, indent=2).encode("utf-8"))
+    buffer.seek(0)
+
+    filename = f"incident-io-export-{date.today().isoformat()}.json"
+    return send_file(
+        buffer,
+        mimetype="application/json",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/sync/incident/<incident_id>", methods=["GET"])
+def fetch_incident_payload():
+    incident_id = (incident_id or "").strip()
+    if not incident_id:
+        return jsonify({"error": "Incident ID is required."}), 400
+
+    config = load_sync_config()
+    token = config.get("token") or os.getenv("INCIDENT_IO_API_TOKEN")
+    base_url = config.get("base_url") or None
+
+    try:
+        payload = incident_io_client.fetch_incident_details(
+            incident_id,
+            base_url=base_url,
+            token=token,
+        )
+    except incident_io_client.IncidentAPIError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    return jsonify(payload)
+
+
 @app.route("/sync/config", methods=["POST"])
 def update_sync_config():
     payload = request.get_json(silent=True) or {}

@@ -846,6 +846,35 @@ h1 {
     flex-wrap: wrap;
 }
 
+.json-output {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    border: 1px solid #1e293b;
+}
+
+.helper-text[data-state="success"] {
+    color: #276749;
+}
+
+.helper-text[data-state="info"] {
+    color: #1d4e89;
+}
+
+.helper-text[data-state="warning"] {
+    color: #8a4b0f;
+}
+
+.helper-text[data-state="error"] {
+    color: #b71c1c;
+}
+
 .config-meta {
     color: #516174;
 }
