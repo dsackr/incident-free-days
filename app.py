@@ -3811,7 +3811,7 @@ def download_sync_json():
 
 
 @app.route("/sync/incident/<incident_id>", methods=["GET"])
-def fetch_incident_payload():
+def fetch_incident_payload(incident_id):
     incident_id = (incident_id or "").strip()
     if not incident_id:
         return jsonify({"error": "Incident ID is required."}), 400
