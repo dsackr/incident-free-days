@@ -904,6 +904,12 @@ h1 {
     color: #8d6e00;
 }
 
+.notice.info {
+    background: #e8f1fe;
+    border: 1px solid #c6dbff;
+    color: #1d4b91;
+}
+
 .notice.error {
     background: #ffebee;
     border: 1px solid #ffcdd2;
