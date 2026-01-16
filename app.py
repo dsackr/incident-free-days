@@ -224,6 +224,10 @@ def _procedural_incidents(incidents):
         if classification_raw.casefold() in PROCEDURAL_RCA_EXCLUSIONS:
             continue
 
+        normalized_classification = normalize_rca_category(classification_raw)
+        if normalized_classification not in {"deploy", "change", "missing-task"}:
+            continue
+
         incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
         if not incident_date:
             continue
