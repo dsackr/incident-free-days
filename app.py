@@ -224,6 +224,10 @@ def _procedural_incidents(incidents):
         if classification_raw.casefold() in PROCEDURAL_RCA_EXCLUSIONS:
             continue
 
+        normalized_classification = normalize_rca_category(classification_raw)
+        if normalized_classification not in {"deploy", "change", "missing-task"}:
+            continue
+
         incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
         if not incident_date:
             continue
@@ -243,6 +247,55 @@ def _procedural_incidents(incidents):
 
     results.sort(key=lambda entry: (entry["incident_date"], entry["reported_at"]), reverse=True)
     return results
+
+
+def calculate_longest_procedural_gap(incidents, *, period_start, period_end):
+    period_start = period_start
+    period_end = period_end
+    if period_start > period_end:
+        period_start, period_end = period_end, period_start
+
+    procedural = _procedural_incidents(incidents)
+    incident_dates = sorted(
+        {
+            entry["incident_date"]
+            for entry in procedural
+            if period_start <= entry["incident_date"] <= period_end
+        }
+    )
+
+    gap_start = period_start
+    gap_end = period_end
+    gap_days = (period_end - period_start).days
+    if not incident_dates:
+        return {
+            "gap_days": gap_days,
+            "gap_start": gap_start,
+            "gap_end": gap_end,
+            "incident_count": 0,
+        }
+
+    previous_date = period_start
+    for incident_date in incident_dates:
+        gap = (incident_date - previous_date).days
+        if gap > gap_days:
+            gap_days = gap
+            gap_start = previous_date
+            gap_end = incident_date
+        previous_date = incident_date
+
+    end_gap = (period_end - previous_date).days
+    if end_gap > gap_days:
+        gap_days = end_gap
+        gap_start = previous_date
+        gap_end = period_end
+
+    return {
+        "gap_days": gap_days,
+        "gap_start": gap_start,
+        "gap_end": gap_end,
+        "incident_count": len(incident_dates),
+    }
 
 
 def compute_osha_state_from_incidents(incidents, raw_data=None):
@@ -1896,6 +1949,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     sync_config = build_sync_config_view(sync_config_raw)
     env_token_available = bool(os.getenv("INCIDENT_IO_API_TOKEN"))
     current_year = date.today().year
+    osha_period_type = request.args.get("osha_period", "yearly")
+    osha_year_param = request.args.get("osha_year")
+    osha_quarter_param = request.args.get("osha_quarter")
 
     try:
         year = int(year_str) if year_str else current_year
@@ -1937,6 +1993,53 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         for event in load_events(OTHER_EVENTS_FILE)
         if (event.get("event_type") or "") != "Operational Incident"
     ]
+
+    procedural_years = {
+        entry["incident_date"].year for entry in _procedural_incidents(incidents)
+    }
+    min_procedural_year = min(procedural_years) if procedural_years else current_year
+    osha_available_years = list(range(current_year, min_procedural_year - 1, -1))
+
+    if osha_period_type not in {"yearly", "quarterly"}:
+        osha_period_type = "yearly"
+
+    try:
+        osha_year = int(osha_year_param) if osha_year_param else current_year
+    except ValueError:
+        osha_year = current_year
+
+    if osha_year > current_year:
+        osha_year = current_year
+    if osha_year < min_procedural_year:
+        osha_year = min_procedural_year
+
+    try:
+        osha_quarter = int(osha_quarter_param) if osha_quarter_param else None
+    except ValueError:
+        osha_quarter = None
+
+    if osha_period_type == "quarterly":
+        if osha_quarter not in {1, 2, 3, 4}:
+            if osha_year == current_year:
+                osha_quarter = (date.today().month - 1) // 3 + 1
+            else:
+                osha_quarter = 4
+        quarter_start_month = (osha_quarter - 1) * 3 + 1
+        quarter_end_month = quarter_start_month + 2
+        quarter_end_day = calendar.monthrange(osha_year, quarter_end_month)[1]
+        osha_period_start = date(osha_year, quarter_start_month, 1)
+        osha_period_end = date(osha_year, quarter_end_month, quarter_end_day)
+        osha_period_label = f"Q{osha_quarter} {osha_year}"
+    else:
+        osha_period_start = date(osha_year, 1, 1)
+        osha_period_end = date(osha_year, 12, 31)
+        osha_period_label = str(osha_year)
+
+    osha_longest_gap = calculate_longest_procedural_gap(
+        incidents,
+        period_start=osha_period_start,
+        period_end=osha_period_end,
+    )
 
     key_mapping = load_product_key()
     key_present = bool(key_mapping)
@@ -2775,6 +2878,14 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_image_exists=osha_image_exists,
         osha_background_exists=osha_background_exists,
         osha_status=osha_status,
+        osha_period_type=osha_period_type,
+        osha_period_year=osha_year,
+        osha_period_quarter=osha_quarter,
+        osha_available_years=osha_available_years,
+        osha_period_label=osha_period_label,
+        osha_period_start=osha_period_start,
+        osha_period_end=osha_period_end,
+        osha_longest_gap=osha_longest_gap,
         weekly_roundup=weekly_roundup,
         weekly_roundup_weeks=weekly_roundup_weeks,
         weekly_roundup_header=weekly_roundup_header,
