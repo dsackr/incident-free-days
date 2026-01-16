@@ -1186,6 +1186,55 @@
                 <p class="helper-text">Add a procedural RCA incident to generate a preview image.</p>
                 {% endif %}
             </div>
+
+            <div class="osha-preview-section">
+                <h3>Longest period between procedural incidents</h3>
+                <p class="helper-text">
+                    Review the longest gap between procedural incidents for the selected time period.
+                </p>
+                <form method="get" action="{{ url_for('index') }}">
+                    <input type="hidden" name="tab" value="osha" />
+                    <div class="form-row">
+                        <span>Period type</span>
+                        <select name="osha_period">
+                            <option value="yearly" {% if osha_period_type == 'yearly' %}selected{% endif %}>Year</option>
+                            <option value="quarterly" {% if osha_period_type == 'quarterly' %}selected{% endif %}>Quarter</option>
+                        </select>
+                    </div>
+                    <div class="form-row two-column">
+                        <label>
+                            <span>Year</span>
+                            <select name="osha_year">
+                                {% for available_year in osha_available_years %}
+                                    <option value="{{ available_year }}" {% if osha_period_year == available_year %}selected{% endif %}>{{ available_year }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            <span>Quarter</span>
+                            <select name="osha_quarter" {% if osha_period_type != 'quarterly' %}disabled{% endif %}>
+                                {% for quarter in [1, 2, 3, 4] %}
+                                    <option value="{{ quarter }}" {% if osha_period_quarter == quarter %}selected{% endif %}>Q{{ quarter }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                    </div>
+                    <div class="button-row">
+                        <button type="submit" class="secondary-button">Update range</button>
+                    </div>
+                </form>
+                <div class="notice info">
+                    <strong>{{ osha_longest_gap.gap_days }} days</strong>
+                    between {{ osha_longest_gap.gap_start }} and {{ osha_longest_gap.gap_end }}.
+                </div>
+                <p class="helper-text small">
+                    Period: {{ osha_period_start }} to {{ osha_period_end }} ({{ osha_period_label }}).
+                    {{ osha_longest_gap.incident_count }} procedural incidents recorded.
+                </p>
+                {% if osha_longest_gap.incident_count == 0 %}
+                <p class="helper-text">No procedural incidents were recorded in this period.</p>
+                {% endif %}
+            </div>
         </div>
 
         {% if show_config_tab %}
