@@ -2,20 +2,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>{{ year }} Incident Stats (YTD)</title>
+    <title>{{ current_period_label }} Incident Stats</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
 </head>
 <body>
     <div class="page">
         <div class="page-header">
-            <h1>{{ year }} Incident Stats (YTD)</h1>
+            <h1>{{ current_period_label }} Incident Stats</h1>
             <div class="header-links">
                 <a class="admin-link" href="{{ url_for('index') }}">Dashboard</a>
                 <a class="admin-link" href="{{ url_for('graphs_view') }}">Graphs</a>
             </div>
         </div>
 
+        <div class="calendar-header">
+            <div class="calendar-nav">
+                <a class="icon-button icon-only" href="{{ prev_link }}" aria-label="Previous period">&#9664;</a>
+                <div class="current-period">{{ current_period_label }}</div>
+                <a class="icon-button icon-only" href="{{ next_link }}" aria-label="Next period">&#9654;</a>
+            </div>
+            <div class="calendar-actions">
+                <div class="view-toggle" role="group" aria-label="Stats view toggle">
+                    <a class="icon-button icon-only {% if view_mode == 'yearly' %}active{% endif %}" href="{{ yearly_view_link }}" aria-label="Year view">&#128197;</a>
+                    <a class="icon-button icon-only {% if view_mode == 'quarterly' %}active{% endif %}" href="{{ quarterly_view_link }}" aria-label="Quarter view">Q</a>
+                    <a class="icon-button icon-only {% if view_mode == 'monthly' %}active{% endif %}" href="{{ monthly_view_link }}" aria-label="Month view">&#128198;</a>
+                </div>
+            </div>
+        </div>
+
         <form class="control-form" method="GET" action="{{ url_for('stats_view') }}">
+            <input type="hidden" name="view" value="{{ view_mode }}" />
+            {% if month_selection %}
+            <input type="hidden" name="month" value="{{ month_selection }}" />
+            {% endif %}
+            {% if quarter_selection %}
+            <input type="hidden" name="quarter" value="{{ quarter_selection }}" />
+            {% endif %}
             <div class="control-row">
                 <label>
                     Year
@@ -108,8 +130,8 @@
         <div class="table-card">
             <div class="table-card-header">
                 <div>
-                    <h2>Severity totals by month (YTD)</h2>
-                    <p class="helper-text">Counts update with the selected severities, pillar, product, and year.</p>
+                    <h2>Severity totals by month</h2>
+                    <p class="helper-text">Counts update with the selected severities, pillar, product, and period.</p>
                 </div>
             </div>
             <div class="table-wrapper">

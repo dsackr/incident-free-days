@@ -1929,7 +1929,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     product_filter = [value for value in request.args.getlist("product") if value]
     severity_params = [value for value in request.args.getlist("severity") if value]
     event_type_params = [value for value in request.args.getlist("event_type") if value]
-    rca_classification_filter = [value for value in request.args.getlist("rca_classification") if value]
+    rca_classification_filter = [
+        value for value in request.args.getlist("rca_classification") if value
+    ]
     severity_param_supplied = "severity" in request.args
     rca_classification_param_supplied = "rca_classification" in request.args
     key_missing = request.args.get("key_missing") == "1"
@@ -2101,6 +2103,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
     if severity_params:
         severity_filter = severity_params
+    elif severities:
+        severity_filter = [severity for severity in severities if not is_sev6(severity)]
+        severity_param_supplied = True
     else:
         severity_filter = []
 
@@ -3131,6 +3136,9 @@ def index():
 def stats_view():
     today = date.today()
     year_param = request.args.get("year")
+    view_mode = request.args.get("view", "monthly")
+    month_param = request.args.get("month")
+    quarter_param = request.args.get("quarter")
     pillar_filter = request.args.get("pillar") or None
     product_filter = request.args.get("product") or None
 
@@ -3138,12 +3146,35 @@ def stats_view():
     severity_params = [value for value in request.args.getlist("severity") if value]
     severity_filter = [value for value in severity_params if value in severity_options]
     if not severity_filter:
-        severity_filter = severity_options
+        severity_filter = [value for value in severity_options if value != "6"]
 
     try:
         year = int(year_param) if year_param else today.year
     except ValueError:
         year = today.year
+    try:
+        month_selection = int(month_param) if month_param else None
+    except ValueError:
+        month_selection = None
+    try:
+        quarter_selection = int(quarter_param) if quarter_param else None
+    except ValueError:
+        quarter_selection = None
+
+    if view_mode not in {"yearly", "monthly", "quarterly"}:
+        view_mode = "monthly"
+
+    current_month = today.month
+    if view_mode == "monthly":
+        month_selection = month_selection or current_month
+        quarter_selection = (month_selection - 1) // 3 + 1
+    elif view_mode == "quarterly":
+        if quarter_selection not in {1, 2, 3, 4}:
+            source_month = month_selection or current_month
+            quarter_selection = (source_month - 1) // 3 + 1
+        month_selection = None
+    else:
+        month_selection = None
 
     incidents = [
         event
@@ -3175,8 +3206,21 @@ def stats_view():
         available_years.append(year)
         available_years = sorted(available_years)
 
-    start_date = date(year, 1, 1)
-    end_date = date(year, 12, 31) if year != today.year else today
+    if view_mode == "monthly" and month_selection:
+        start_date = date(year, month_selection, 1)
+        month_end_day = calendar.monthrange(year, month_selection)[1]
+        month_end = date(year, month_selection, month_end_day)
+        end_date = min(month_end, today) if year == today.year else month_end
+    elif view_mode == "quarterly" and quarter_selection:
+        quarter_start_month = (quarter_selection - 1) * 3 + 1
+        quarter_end_month = quarter_start_month + 2
+        start_date = date(year, quarter_start_month, 1)
+        quarter_end_day = calendar.monthrange(year, quarter_end_month)[1]
+        quarter_end = date(year, quarter_end_month, quarter_end_day)
+        end_date = min(quarter_end, today) if year == today.year else quarter_end
+    else:
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31) if year != today.year else today
 
     filtered_incidents = {}
     severity_agnostic_incidents = {}
@@ -3260,27 +3304,38 @@ def stats_view():
             month_index = entry["date"].month - 1
             severity_month_counts[sev_value][month_index] += 1
 
-    severity_totals = {key: sum(months) for key, months in severity_month_counts.items()}
+    if view_mode == "monthly" and month_selection:
+        month_indices = [month_selection]
+    elif view_mode == "quarterly" and quarter_selection:
+        start_month = (quarter_selection - 1) * 3 + 1
+        month_indices = [start_month, start_month + 1, start_month + 2]
+    else:
+        month_indices = list(range(1, 13))
+
+    severity_totals = {
+        key: sum(severity_month_counts[key][month - 1] for month in month_indices)
+        for key in severity_month_counts
+    }
     totals_by_month = [
         sum(
-            severity_month_counts[sev][month_index]
+            severity_month_counts[sev][month_index - 1]
             for sev in severity_options
             if sev in severity_filter
         )
-        for month_index in range(12)
+        for month_index in month_indices
     ]
-    total_incidents = len(filtered_incidents)
+    total_incidents = sum(classification_counts.values())
     percent_self_inflicted = (
         round((classification_counts["self_inflicted"] / total_incidents) * 100, 1)
         if total_incidents
         else 0
     )
 
-    month_labels = [calendar.month_abbr[idx] for idx in range(1, 13)]
+    month_labels = [calendar.month_abbr[idx] for idx in month_indices]
     severity_rows = [
         {
             "label": f"Sev {value}",
-            "months": severity_month_counts[value],
+            "months": [severity_month_counts[value][month - 1] for month in month_indices],
             "total": severity_totals[value],
             "included_in_totals": value in severity_filter,
             "is_total": False,
@@ -3308,10 +3363,72 @@ def stats_view():
             {"label": "Severity", "value": ", ".join(f"Sev {s}" for s in severity_filter)}
         )
 
+    def build_stats_link(target_view, target_year, target_month=None, target_quarter=None):
+        params = {"view": target_view, "year": target_year}
+        if target_view == "monthly" and target_month:
+            params["month"] = target_month
+        if target_view == "quarterly" and target_quarter:
+            params["quarter"] = target_quarter
+        if pillar_filter:
+            params["pillar"] = pillar_filter
+        if product_filter:
+            params["product"] = product_filter
+        if severity_filter:
+            params["severity"] = severity_filter
+        return url_for("stats_view", **params)
+
+    if view_mode == "monthly" and month_selection:
+        current_period_label = f"{calendar.month_name[month_selection]} {year}"
+        prev_year = year
+        prev_month = month_selection - 1
+        if prev_month < 1:
+            prev_month = 12
+            prev_year -= 1
+        next_year = year
+        next_month = month_selection + 1
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+        prev_link = build_stats_link("monthly", prev_year, target_month=prev_month)
+        next_link = build_stats_link("monthly", next_year, target_month=next_month)
+    elif view_mode == "quarterly" and quarter_selection:
+        current_period_label = f"Q{quarter_selection} {year}"
+        prev_year = year
+        prev_quarter = quarter_selection - 1
+        if prev_quarter < 1:
+            prev_quarter = 4
+            prev_year -= 1
+        next_year = year
+        next_quarter = quarter_selection + 1
+        if next_quarter > 4:
+            next_quarter = 1
+            next_year += 1
+        prev_link = build_stats_link("quarterly", prev_year, target_quarter=prev_quarter)
+        next_link = build_stats_link("quarterly", next_year, target_quarter=next_quarter)
+    else:
+        current_period_label = str(year)
+        prev_link = build_stats_link("yearly", year - 1)
+        next_link = build_stats_link("yearly", year + 1)
+
+    target_month_for_toggle = month_selection or today.month
+    target_quarter_for_toggle = quarter_selection or (
+        (target_month_for_toggle - 1) // 3 + 1
+    )
+    yearly_view_link = build_stats_link("yearly", year)
+    monthly_view_link = build_stats_link(
+        "monthly", year, target_month=target_month_for_toggle
+    )
+    quarterly_view_link = build_stats_link(
+        "quarterly", year, target_quarter=target_quarter_for_toggle
+    )
+
     return render_template(
         "stats.html",
         year=year,
         available_years=available_years,
+        view_mode=view_mode,
+        month_selection=month_selection,
+        quarter_selection=quarter_selection,
         pillars=pillars,
         products=products,
         pillar_filter=pillar_filter,
@@ -3324,6 +3441,12 @@ def stats_view():
         month_labels=month_labels,
         severity_rows=severity_rows,
         selected_filters=selected_filters,
+        current_period_label=current_period_label,
+        prev_link=prev_link,
+        next_link=next_link,
+        yearly_view_link=yearly_view_link,
+        monthly_view_link=monthly_view_link,
+        quarterly_view_link=quarterly_view_link,
     )
 
 
