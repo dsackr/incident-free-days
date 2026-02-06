@@ -249,6 +249,52 @@ def _procedural_incidents(incidents):
     return results
 
 
+def incident_resets_osha_counter(incident):
+    classification_raw = (incident.get("rca_classification") or "").strip()
+    if not classification_raw:
+        return False
+
+    if classification_raw.casefold() in PROCEDURAL_RCA_EXCLUSIONS:
+        return False
+
+    normalized_classification = normalize_rca_category(classification_raw)
+    return normalized_classification in {"deploy", "change", "missing-task"}
+
+
+def build_troubleshoot_rows(incidents, *, weeks=4):
+    cutoff_date = date.today() - timedelta(weeks=weeks)
+    rows = []
+
+    for incident in incidents or []:
+        incident_date = parse_date(incident.get("date") or incident.get("reported_at"))
+        if not incident_date or incident_date < cutoff_date:
+            continue
+
+        reported_at = parse_datetime(incident.get("reported_at"))
+        if not reported_at:
+            reported_at = datetime.combine(incident_date, time.min)
+
+        incident_number = _normalize_incident_number(
+            incident.get("inc_number") or incident.get("incident_number") or incident.get("id")
+        )
+        if not incident_number:
+            incident_number = "Unknown"
+
+        classification = (incident.get("rca_classification") or "").strip() or "Unknown"
+        rows.append(
+            {
+                "incident_number": incident_number,
+                "rca_classification": classification,
+                "resets_osha": incident_resets_osha_counter(incident),
+                "incident_date": incident_date,
+                "reported_at": reported_at,
+            }
+        )
+
+    rows.sort(key=lambda row: (row["incident_date"], row["reported_at"]), reverse=True)
+    return rows
+
+
 def calculate_longest_procedural_gap(incidents, *, period_start, period_end):
     period_start = period_start
     period_end = period_end
@@ -1938,7 +1984,7 @@ def render_dashboard(tab_override=None, show_config_tab=False):
     key_uploaded = request.args.get("key_uploaded") == "1"
     key_error = request.args.get("key_error")
     active_tab = tab_override or request.args.get("tab", "incidents")
-    allowed_tabs = {"incidents", "others", "osha", "table"}
+    allowed_tabs = {"incidents", "others", "osha", "table", "troubleshoot"}
     if show_config_tab:
         allowed_tabs.add("form")
 
@@ -2054,6 +2100,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
 
     osha_image_exists = os.path.exists(OSHA_OUTPUT_IMAGE)
     osha_status = request.args.get("osha_status")
+    troubleshoot_rows = build_troubleshoot_rows(incidents)
+    troubleshoot_start = date.today() - timedelta(weeks=4)
+    troubleshoot_end = date.today()
 
     # Build product ↔ pillar relationships
     product_pillar_map = {k: v for k, v in key_mapping.items() if k and v}
@@ -2891,6 +2940,9 @@ def render_dashboard(tab_override=None, show_config_tab=False):
         osha_period_start=osha_period_start,
         osha_period_end=osha_period_end,
         osha_longest_gap=osha_longest_gap,
+        troubleshoot_rows=troubleshoot_rows,
+        troubleshoot_start=troubleshoot_start,
+        troubleshoot_end=troubleshoot_end,
         weekly_roundup=weekly_roundup,
         weekly_roundup_weeks=weekly_roundup_weeks,
         weekly_roundup_header=weekly_roundup_header,
@@ -3130,6 +3182,11 @@ def graphs_view():
 @app.route("/", methods=["GET"])
 def index():
     return render_dashboard()
+
+
+@app.route("/troubleshoot", methods=["GET"])
+def troubleshoot_view():
+    return render_dashboard(tab_override="troubleshoot")
 
 
 @app.route("/stats", methods=["GET"])
