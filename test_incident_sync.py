@@ -747,6 +747,27 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(state["days_since"], 3)
         self.assertEqual(state["prior_count"], 7)
 
+    def test_compute_osha_state_from_incidents_counts_missed_task(self):
+        today = date.today()
+        incidents = [
+            {
+                "inc_number": "INC-400",
+                "date": (today - timedelta(days=2)).isoformat(),
+                "rca_classification": "Missed Task Incident",
+            },
+            {
+                "inc_number": "INC-300",
+                "date": (today - timedelta(days=5)).isoformat(),
+                "rca_classification": "Change",
+            },
+        ]
+
+        state = app.compute_osha_state_from_incidents(incidents)
+
+        self.assertEqual(state["incident_number"], "400")
+        self.assertEqual(state["reason"], "Missed")
+        self.assertEqual(state["days_since"], 2)
+
     def test_compute_osha_state_from_incidents_skips_same_day_prior(self):
         today = date.today()
         incidents = [
