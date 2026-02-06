@@ -1081,7 +1081,7 @@ def normalize_rca_category(rca_value):
 
     if "non-procedural" in normalized:
         return "non-procedural"
-    if "missing" in normalized and "task" in normalized:
+    if ("missing" in normalized or "missed" in normalized) and "task" in normalized:
         return "missing-task"
     if "deploy" in normalized:
         return "deploy"
