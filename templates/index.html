@@ -1237,6 +1237,37 @@
             </div>
         </div>
 
+        <div id="troubleshoot-tab" class="tab-content {% if active_tab == 'troubleshoot' %}active{% endif %}">
+            <h2>Troubleshoot</h2>
+            <p class="helper-text">
+                Last 4 weeks of incidents ({{ troubleshoot_start }} to {{ troubleshoot_end }}).
+            </p>
+            <div class="table-wrapper">
+                <table class="incidents-table">
+                    <thead>
+                        <tr>
+                            <th>Incident #</th>
+                            <th>RCA Classification</th>
+                            <th>OSHA Reset</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in troubleshoot_rows %}
+                        <tr>
+                            <td>{{ row.incident_number }}</td>
+                            <td>{{ row.rca_classification }}</td>
+                            <td>{{ "Yes" if row.resets_osha else "No" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr class="empty-row">
+                            <td colspan="3">No incidents recorded in the last 4 weeks.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         {% if show_config_tab %}
         <div id="form-tab" class="tab-content {% if active_tab == 'form' %}active{% endif %}">
             <h2>Configuration</h2>
