@@ -33,6 +33,7 @@
             <div class="osha-preview-section">
                 <p class="helper-text">
                     The OSHA counter updates automatically based on the latest procedural RCA Classification.
+                    <a href="{{ url_for('osha_self_inflicted_json') }}" target="_blank" rel="noopener">View latest self-inflicted incident JSON</a>.
                 </p>
                 {% if osha_image_exists %}
                 <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
