@@ -38,6 +38,7 @@ OTHER_EVENTS_FILE = os.path.join(BASE_DIR, "others.json")
 PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 OSHA_DATA_FILE = os.path.join(BASE_DIR, "osha_data.json")
+SELF_INFLICTED_INCIDENTS_FILE = os.path.join(BASE_DIR, "osha_self_inflicted_incidents.json")
 OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
 OSHA_OUTPUT_BINARY = os.path.join(BASE_DIR, "static", "current_sign.bin")
@@ -189,6 +190,47 @@ def save_osha_data(data):
 
 def compute_osha_state(raw_data=None):
     return compute_osha_state_from_incidents(load_events(DATA_FILE), raw_data=raw_data)
+
+
+def build_self_inflicted_incident_summary(incidents, *, limit=5):
+    summaries = []
+    seen_inc_numbers = set()
+
+    for entry in _procedural_incidents(incidents):
+        incident = entry["incident"]
+        inc_number = _normalize_incident_number(
+            incident.get("inc_number") or incident.get("incident_number") or incident.get("id")
+        )
+
+        if inc_number and inc_number in seen_inc_numbers:
+            continue
+        if inc_number:
+            seen_inc_numbers.add(inc_number)
+
+        summaries.append(
+            {
+                "INC Number": inc_number or "Unknown",
+                "INC Date": entry["incident_date"].isoformat(),
+                "RCA Classification": entry["classification"],
+            }
+        )
+
+        if len(summaries) >= limit:
+            break
+
+    return summaries
+
+
+def save_self_inflicted_incident_summary(incidents, path=None):
+    payload = build_self_inflicted_incident_summary(incidents)
+    target_path = path or SELF_INFLICTED_INCIDENTS_FILE
+    try:
+        with open(target_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+    except OSError:
+        pass
+
+    return payload
 
 
 def _normalize_incident_number(raw_value):
@@ -1928,6 +1970,7 @@ def sync_incidents_from_api(
     if not dry_run:
         save_events(incidents_file, incidents)
         save_events(other_events_file, other_events)
+        save_self_inflicted_incident_summary(incidents)
 
         config = load_sync_config()
         config["last_sync"] = {
@@ -4075,6 +4118,15 @@ def build_troubleshooting_payload():
         "incidents": load_events(DATA_FILE),
         "other_events": load_events(OTHER_EVENTS_FILE),
     }
+
+
+@app.route("/osha/self-inflicted.json", methods=["GET"])
+def osha_self_inflicted_json():
+    if os.path.exists(SELF_INFLICTED_INCIDENTS_FILE):
+        return send_file(SELF_INFLICTED_INCIDENTS_FILE, mimetype="application/json")
+
+    payload = build_self_inflicted_incident_summary(load_events(DATA_FILE))
+    return jsonify(payload)
 
 
 @app.route("/sync/download/json", methods=["GET"])

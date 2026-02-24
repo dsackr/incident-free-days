@@ -21,11 +21,15 @@ class IncidentSyncTests(unittest.TestCase):
         self.original_data_file = app.DATA_FILE
         self.original_other_file = app.OTHER_EVENTS_FILE
         self.original_osha_file = app.OSHA_DATA_FILE
+        self.original_self_inflicted_file = app.SELF_INFLICTED_INCIDENTS_FILE
         app.SYNC_CONFIG_FILE = self.sync_config_file
         app.PRODUCT_KEY_FILE = os.path.join(self.temp_dir.name, "product_pillar_key.json")
         app.DATA_FILE = self.incidents_file
         app.OTHER_EVENTS_FILE = self.other_file
         app.OSHA_DATA_FILE = os.path.join(self.temp_dir.name, "osha_data.json")
+        app.SELF_INFLICTED_INCIDENTS_FILE = os.path.join(
+            self.temp_dir.name, "osha_self_inflicted_incidents.json"
+        )
 
     def tearDown(self):
         app.SYNC_CONFIG_FILE = self.original_sync_config
@@ -33,6 +37,7 @@ class IncidentSyncTests(unittest.TestCase):
         app.DATA_FILE = self.original_data_file
         app.OTHER_EVENTS_FILE = self.original_other_file
         app.OSHA_DATA_FILE = self.original_osha_file
+        app.SELF_INFLICTED_INCIDENTS_FILE = self.original_self_inflicted_file
         self.temp_dir.cleanup()
 
     def test_normalize_incident_payloads_maps_core_fields(self):
@@ -815,6 +820,77 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(state["incident_number"], "555")
         self.assertEqual(state["days_since"], 4)
         self.assertEqual(state["prior_count"], 5)
+
+
+    def test_build_self_inflicted_incident_summary_limits_and_dedupes(self):
+        incidents = [
+            {"inc_number": "INC-700", "date": "2025-01-07", "rca_classification": "Deploy"},
+            {"inc_number": "INC-700", "date": "2025-01-07", "rca_classification": "Deploy"},
+            {"inc_number": "INC-699", "date": "2025-01-06", "rca_classification": "Change"},
+            {"inc_number": "INC-698", "date": "2025-01-05", "rca_classification": "Missed Task Incident"},
+            {"inc_number": "INC-697", "date": "2025-01-04", "rca_classification": "Deploy"},
+            {"inc_number": "INC-696", "date": "2025-01-03", "rca_classification": "Change"},
+            {"inc_number": "INC-695", "date": "2025-01-02", "rca_classification": "Deploy"},
+        ]
+
+        summary = app.build_self_inflicted_incident_summary(incidents)
+
+        self.assertEqual(len(summary), 5)
+        self.assertEqual(summary[0]["INC Number"], "700")
+        self.assertEqual(summary[-1]["INC Number"], "696")
+        self.assertEqual(
+            set(summary[0].keys()),
+            {"INC Number", "INC Date", "RCA Classification"},
+        )
+
+    @mock.patch("incident_io_client.fetch_incidents")
+    def test_sync_writes_self_inflicted_summary_file(self, mock_fetch_incidents):
+        mock_fetch_incidents.return_value = [
+            {
+                "reference": "INC-900",
+                "incident_timestamp_values": [
+                    {
+                        "incident_timestamp": {"name": "Reported at"},
+                        "value": {"value": "2025-02-01T08:00:00Z"},
+                    }
+                ],
+                "custom_field_entries": [
+                    {
+                        "custom_field": {"name": "RCA Classification"},
+                        "values": [{"value": "Deploy"}],
+                    }
+                ],
+            }
+        ]
+
+        summary = app.sync_incidents_from_api(
+            dry_run=False,
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+
+        self.assertEqual(summary["added_incidents"], 1)
+        self.assertTrue(os.path.exists(app.SELF_INFLICTED_INCIDENTS_FILE))
+
+        with open(app.SELF_INFLICTED_INCIDENTS_FILE, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
+        self.assertEqual(payload[0]["INC Number"], "900")
+        self.assertEqual(payload[0]["RCA Classification"], "Deploy")
+
+    def test_osha_self_inflicted_endpoint_returns_json(self):
+        payload = [{"INC Number": "911", "INC Date": "2025-03-01", "RCA Classification": "Change"}]
+        with open(app.SELF_INFLICTED_INCIDENTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+        client = app.app.test_client()
+        response = client.get("/osha/self-inflicted.json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), payload)
+        response.close()
 
     def test_wipe_endpoint_clears_local_files_and_sync_state(self):
         app.save_events(self.incidents_file, [{"inc_number": "INC-1", "event_type": "Operational Incident"}])
