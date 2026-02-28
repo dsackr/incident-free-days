@@ -29,6 +29,7 @@ import requests
 
 import incident_io_client
 import display_client
+import google_form_client
 
 app = Flask(__name__)
 
@@ -39,6 +40,7 @@ PRODUCT_KEY_FILE = os.path.join(BASE_DIR, "product_pillar_key.json")
 SYNC_CONFIG_FILE = os.path.join(BASE_DIR, "sync_config.json")
 OSHA_DATA_FILE = os.path.join(BASE_DIR, "osha_data.json")
 SELF_INFLICTED_INCIDENTS_FILE = os.path.join(BASE_DIR, "osha_self_inflicted_incidents.json")
+SELF_INFLICTED_SUBMITTED_FILE = os.path.join(BASE_DIR, "submitted_self_inflicted.json")
 OSHA_BACKGROUND_IMAGE = os.path.join(BASE_DIR, "static", "background.png")
 OSHA_OUTPUT_IMAGE = os.path.join(BASE_DIR, "static", "current_sign.png")
 OSHA_OUTPUT_BINARY = os.path.join(BASE_DIR, "static", "current_sign.bin")
@@ -1970,7 +1972,13 @@ def sync_incidents_from_api(
     if not dry_run:
         save_events(incidents_file, incidents)
         save_events(other_events_file, other_events)
-        save_self_inflicted_incident_summary(incidents)
+        self_inflicted_summary = save_self_inflicted_incident_summary(incidents)
+        self_inflicted_form_submitted, self_inflicted_form_failed = (
+            google_form_client.submit_self_inflicted_rows(
+                self_inflicted_summary,
+                submitted_path=SELF_INFLICTED_SUBMITTED_FILE,
+            )
+        )
 
         config = load_sync_config()
         config["last_sync"] = {
@@ -1986,12 +1994,17 @@ def sync_incidents_from_api(
             "total_events": len(added_event_details),
         }
         save_sync_config(config)
+    else:
+        self_inflicted_form_submitted = 0
+        self_inflicted_form_failed = 0
 
     return {
         "fetched": len(fetched),
         "added_incidents": added_incidents,
         "added_other_events": added_other_events,
         "updated_events": updated_events,
+        "self_inflicted_form_submitted": self_inflicted_form_submitted,
+        "self_inflicted_form_failed": self_inflicted_form_failed,
         "dry_run": dry_run,
         "samples": sample_payloads if include_samples else [],
     }

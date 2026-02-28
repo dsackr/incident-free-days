@@ -22,6 +22,7 @@ class IncidentSyncTests(unittest.TestCase):
         self.original_other_file = app.OTHER_EVENTS_FILE
         self.original_osha_file = app.OSHA_DATA_FILE
         self.original_self_inflicted_file = app.SELF_INFLICTED_INCIDENTS_FILE
+        self.original_submitted_self_inflicted_file = app.SELF_INFLICTED_SUBMITTED_FILE
         app.SYNC_CONFIG_FILE = self.sync_config_file
         app.PRODUCT_KEY_FILE = os.path.join(self.temp_dir.name, "product_pillar_key.json")
         app.DATA_FILE = self.incidents_file
@@ -29,6 +30,9 @@ class IncidentSyncTests(unittest.TestCase):
         app.OSHA_DATA_FILE = os.path.join(self.temp_dir.name, "osha_data.json")
         app.SELF_INFLICTED_INCIDENTS_FILE = os.path.join(
             self.temp_dir.name, "osha_self_inflicted_incidents.json"
+        )
+        app.SELF_INFLICTED_SUBMITTED_FILE = os.path.join(
+            self.temp_dir.name, "submitted_self_inflicted.json"
         )
 
     def tearDown(self):
@@ -38,6 +42,7 @@ class IncidentSyncTests(unittest.TestCase):
         app.OTHER_EVENTS_FILE = self.original_other_file
         app.OSHA_DATA_FILE = self.original_osha_file
         app.SELF_INFLICTED_INCIDENTS_FILE = self.original_self_inflicted_file
+        app.SELF_INFLICTED_SUBMITTED_FILE = self.original_submitted_self_inflicted_file
         self.temp_dir.cleanup()
 
     def test_normalize_incident_payloads_maps_core_fields(self):
@@ -880,6 +885,53 @@ class IncidentSyncTests(unittest.TestCase):
         self.assertEqual(payload[0]["INC Number"], "900")
         self.assertEqual(payload[0]["RCA Classification"], "Deploy")
 
+    @mock.patch("google_form_client.requests.post")
+    @mock.patch("incident_io_client.fetch_incidents")
+    def test_sync_submits_self_inflicted_once_with_dedupe(
+        self,
+        mock_fetch_incidents,
+        mock_post,
+    ):
+        mock_post.return_value.ok = True
+        mock_fetch_incidents.return_value = [
+            {
+                "reference": "INC-900",
+                "incident_timestamp_values": [
+                    {
+                        "incident_timestamp": {"name": "Reported at"},
+                        "value": {"value": "2025-02-01T08:00:00Z"},
+                    }
+                ],
+                "custom_field_entries": [
+                    {
+                        "custom_field": {"name": "RCA Classification"},
+                        "values": [{"value": "Deploy"}],
+                    }
+                ],
+            }
+        ]
+
+        first_summary = app.sync_incidents_from_api(
+            dry_run=False,
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+        second_summary = app.sync_incidents_from_api(
+            dry_run=False,
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+            incidents_file=self.incidents_file,
+            other_events_file=self.other_file,
+        )
+
+        self.assertEqual(mock_post.call_count, 1)
+        self.assertEqual(first_summary["self_inflicted_form_submitted"], 1)
+        self.assertEqual(first_summary["self_inflicted_form_failed"], 0)
+        self.assertEqual(second_summary["self_inflicted_form_submitted"], 0)
+        self.assertEqual(second_summary["self_inflicted_form_failed"], 0)
+
     def test_osha_self_inflicted_endpoint_returns_json(self):
         payload = [{"INC Number": "911", "INC Date": "2025-03-01", "RCA Classification": "Change"}]
         with open(app.SELF_INFLICTED_INCIDENTS_FILE, "w", encoding="utf-8") as f:
@@ -960,7 +1012,7 @@ class StatsViewTests(unittest.TestCase):
         with open(self.incident_path, "w", encoding="utf-8") as f:
             json.dump(incidents, f)
 
-        with app.app.test_request_context("/stats?year=2025"):
+        with app.app.test_request_context("/stats?year=2025&view=yearly"):
             with mock.patch("app.render_template") as render_template_mock:
                 render_template_mock.return_value = "rendered"
 
