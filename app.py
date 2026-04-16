@@ -3620,12 +3620,42 @@ def display_frame_upload():
     return response
 
 
-@app.route("/osha/display")
-def osha_display():
+def _ensure_osha_sign_exists():
     if not os.path.exists(OSHA_OUTPUT_IMAGE):
         generate_osha_sign(incidents=load_events(DATA_FILE))
 
-    if not os.path.exists(OSHA_OUTPUT_IMAGE):
+    return os.path.exists(OSHA_OUTPUT_IMAGE)
+
+
+@app.route("/osha/display")
+def osha_display():
+    if not _ensure_osha_sign_exists():
+        return "No OSHA sign available", 404
+
+    frame_bytes = load_display_frame_bytes()
+    if not frame_bytes:
+        return "No OSHA frame available", 404
+
+    if len(frame_bytes) != DISPLAY_FRAME_BYTES:
+        return "Invalid OSHA frame size", 500
+
+    etag = display_frame_etag(frame_bytes)
+    if etag and request.headers.get("If-None-Match") == etag:
+        return Response(status=304, headers={"ETag": etag})
+
+    headers = {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": str(len(frame_bytes)),
+    }
+    if etag:
+        headers["ETag"] = etag
+
+    return Response(frame_bytes, headers=headers)
+
+
+@app.route("/osha/display.png")
+def osha_display_png():
+    if not _ensure_osha_sign_exists():
         return "No OSHA sign available", 404
 
     return send_file(OSHA_OUTPUT_IMAGE, mimetype="image/png")
