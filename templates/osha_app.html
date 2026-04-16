@@ -36,7 +36,7 @@
                     <a href="{{ url_for('osha_self_inflicted_json') }}" target="_blank" rel="noopener">View latest self-inflicted incident JSON</a>.
                 </p>
                 {% if osha_image_exists %}
-                <img class="osha-preview" src="{{ url_for('osha_display') }}" alt="OSHA counter preview" />
+                <img class="osha-preview" src="{{ url_for('osha_display_png') }}" alt="OSHA counter preview" />
                 <form action="{{ url_for('update_osha_counter') }}" method="post" class="button-row">
                     <button type="submit" class="secondary-button">Regenerate sign</button>
                 </form>
