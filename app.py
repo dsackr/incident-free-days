@@ -2426,9 +2426,23 @@ def render_dashboard(tab_override=None, show_config_tab=False):
             start_date = explicit_date - timedelta(days=explicit_date.weekday())
             end_date = start_date + timedelta(days=6)
         else:
-            current_week_start = app_today - timedelta(days=app_today.weekday())
-            end_date = current_week_start - timedelta(days=1)
-            start_date = end_date - timedelta(days=6)
+            if view_mode == "monthly" and month_selection:
+                ref_date = date(year, month_selection, 1)
+                start_date = ref_date - timedelta(days=ref_date.weekday())
+                end_date = start_date + timedelta(days=6)
+            elif view_mode == "quarterly" and quarter_selection:
+                start_month = (quarter_selection - 1) * 3 + 1
+                ref_date = date(year, start_month, 1)
+                start_date = ref_date - timedelta(days=ref_date.weekday())
+                end_date = start_date + timedelta(days=6)
+            elif year != app_today.year:
+                ref_date = date(year, 1, 1)
+                start_date = ref_date - timedelta(days=ref_date.weekday())
+                end_date = start_date + timedelta(days=6)
+            else:
+                current_week_start = app_today - timedelta(days=app_today.weekday())
+                end_date = current_week_start - timedelta(days=1)
+                start_date = end_date - timedelta(days=6)
 
         return start_date, end_date
 
